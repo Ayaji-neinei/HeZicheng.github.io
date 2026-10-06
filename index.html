@@ -13,19 +13,24 @@
 
     <header class="site-header">
       <div class="bar">
-        <span class="brand">AI 学习管理</span>
-        <nav class="tabs" aria-label="板块切换">
-          <button class="tab is-active" type="button" data-tab="roadmap">① 学习路线</button>
-          <button class="tab" type="button" data-tab="chat">② 向 AI 提问</button>
-          <button class="tab" type="button" data-tab="notes">③ 学习笔记</button>
-        </nav>
+        <a class="brand" href="#home" data-screen="home">AI 学习管理</a>
       </div>
     </header>
 
     <main id="main">
-      <!-- ===================== ① 学习路线 ===================== -->
-      <section class="panel is-active" id="panel-roadmap" aria-labelledby="h-roadmap">
-        <div class="panel-head">
+      <!-- ============ 主界面：三个正方形入口 ============ -->
+      <section class="screen is-active" id="screen-home">
+        <div class="tiles">
+          <button class="tile" type="button" data-screen="roadmap">我的学习路线</button>
+          <button class="tile" type="button" data-screen="chat">向 AI 提问</button>
+          <button class="tile" type="button" data-screen="notes">学习笔记</button>
+        </div>
+      </section>
+
+      <!-- ============ 子界面 ① 学习路线 ============ -->
+      <section class="screen" id="screen-roadmap" aria-labelledby="h-roadmap">
+        <div class="screen-head">
+          <button class="btn back" type="button" data-screen="home">← 返回</button>
           <h1 id="h-roadmap">我的学习路线</h1>
           <p class="sub" id="roadmap-summary">还没有阶段</p>
         </div>
@@ -50,19 +55,12 @@
 
         <ul class="stages" id="roadmap-list"></ul>
         <p class="empty" id="roadmap-empty" hidden>还没有阶段，先在上面添加一条吧。</p>
-
-        <details class="card">
-          <summary>怎么用这个板块</summary>
-          <p>
-            建议把整条路线拆成 6～10 个阶段，只保留<strong>当前正在学</strong>的那一个为「学习中」。
-            一眼就能看出：学到哪了、下一步该学什么。
-          </p>
-        </details>
       </section>
 
-      <!-- ===================== ② 向 AI 提问 ===================== -->
-      <section class="panel" id="panel-chat" aria-labelledby="h-chat">
-        <div class="panel-head">
+      <!-- ============ 子界面 ② 向 AI 提问 ============ -->
+      <section class="screen" id="screen-chat" aria-labelledby="h-chat">
+        <div class="screen-head">
+          <button class="btn back" type="button" data-screen="home">← 返回</button>
           <h1 id="h-chat">向 AI 提问</h1>
           <p class="sub">关于学习的任何问题都可以问，回答会留在下面成为你的资料。</p>
         </div>
@@ -143,9 +141,10 @@
         </div>
       </section>
 
-      <!-- ===================== ③ 学习笔记 ===================== -->
-      <section class="panel" id="panel-notes" aria-labelledby="h-notes">
-        <div class="panel-head">
+      <!-- ============ 子界面 ③ 学习笔记 ============ -->
+      <section class="screen" id="screen-notes" aria-labelledby="h-notes">
+        <div class="screen-head">
+          <button class="btn back" type="button" data-screen="home">← 返回</button>
           <h1 id="h-notes">学习笔记</h1>
           <p class="sub" id="notes-summary">还没有笔记</p>
         </div>

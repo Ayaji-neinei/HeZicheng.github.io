@@ -17,7 +17,7 @@
   var STATUS_ORDER = ['todo', 'doing', 'done'];
   var DEFAULT_BASE = 'https://api.deepseek.com';
   var DEFAULT_MODEL = 'deepseek-chat';
-  var TABS = ['roadmap', 'chat', 'notes'];
+  var SCREENS = ['home', 'roadmap', 'chat', 'notes'];
 
   var DEFAULT_ROADMAP = [
     '数学基础：线性代数、概率统计、微积分',
@@ -68,29 +68,32 @@
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
 
-  /* ---------------- 板块切换 ---------------- */
+  /* ---------------- 界面切换：主界面 ↔ 子界面 ---------------- */
 
-  var tabs = Array.prototype.slice.call(document.querySelectorAll('.tab'));
-
-  function showTab(name) {
-    tabs.forEach(function (tab) {
-      tab.classList.toggle('is-active', tab.dataset.tab === name);
+  function showScreen(name) {
+    SCREENS.forEach(function (key) {
+      var el = $('screen-' + key);
+      if (el) el.classList.toggle('is-active', key === name);
     });
-    TABS.forEach(function (key) {
-      var panel = $('panel-' + key);
-      if (panel) panel.classList.toggle('is-active', key === name);
-    });
+    window.scrollTo(0, 0);
   }
 
-  tabs.forEach(function (tab) {
-    tab.addEventListener('click', function () {
-      showTab(tab.dataset.tab);
-      if (history.replaceState) history.replaceState(null, '', '#' + tab.dataset.tab);
+  Array.prototype.slice.call(document.querySelectorAll('[data-screen]')).forEach(function (el) {
+    el.addEventListener('click', function (event) {
+      if (el.tagName === 'A') event.preventDefault();
+      var target = el.dataset.screen;
+      showScreen(target);
+      if (history.replaceState) history.replaceState(null, '', '#' + target);
     });
   });
 
-  var initialTab = (location.hash || '').replace('#', '');
-  showTab(TABS.indexOf(initialTab) >= 0 ? initialTab : 'roadmap');
+  window.addEventListener('hashchange', function () {
+    var name = (location.hash || '').replace('#', '');
+    showScreen(SCREENS.indexOf(name) >= 0 ? name : 'home');
+  });
+
+  var initialScreen = (location.hash || '').replace('#', '');
+  showScreen(SCREENS.indexOf(initialScreen) >= 0 ? initialScreen : 'home');
 
   /* ---------------- ① 学习路线 ---------------- */
 
@@ -293,7 +296,6 @@
     saveNotes();
     renderNotes();
     renderFooter();
-    showTab('notes');
   }
 
   $('note-add').addEventListener('click', addNote);
