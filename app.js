@@ -24,14 +24,16 @@
   var ATTACH_HINT =
     '支持图片（png / jpg / gif / webp）和文本类文件（txt / md / csv / json / 代码）。可拖拽到这一块，或直接在输入框里 Ctrl+V 粘贴截图。';
 
-  var IMAGE_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+  var IMAGE_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'tif', 'tiff', 'avif', 'heic', 'heif', 'svg'];
   var IMAGE_MIME = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
   var TEXT_EXT = [
     'txt', 'md', 'markdown', 'csv', 'tsv', 'json', 'log', 'yml', 'yaml', 'ini', 'conf', 'cfg',
     'xml', 'html', 'htm', 'css', 'js', 'mjs', 'cjs', 'ts', 'jsx', 'tsx', 'py', 'java', 'c', 'h',
     'cpp', 'hpp', 'cs', 'go', 'rs', 'rb', 'php', 'sh', 'bat', 'sql', 'r', 'm', 'ipynb', 'tex', 'srt', 'vtt'
   ];
-  var MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 单张图片上限（接口上限 32 MiB，这里保守些）
+  var MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 单张图片硬上限（接口上限 32 MiB，这里保守些）
+  var SOFT_IMAGE_BYTES = 3 * 1024 * 1024; // 超过就先压缩
+  var MAX_IMAGE_SIDE = 1600; // 压缩后最长边像素
   var MAX_FILE_BYTES = 1024 * 1024; // 文本文件上限
   var MAX_TEXT_CHARS = 20000; // 单个文本文件最多带入的字符数
   var MAX_ATTACH = 10; // 一次最多附件数
@@ -102,10 +104,67 @@
   function kindOf(file) {
     var ext = extOf(file.name);
     var mime = file.type || '';
-    if (IMAGE_MIME.indexOf(mime) >= 0 || IMAGE_EXT.indexOf(ext) >= 0) return 'image';
+    // 只要浏览器认为它是图片就交给图片流程：接口不收的格式（BMP/TIFF/HEIC 等）
+    // 会由 canvas 尝试转成 JPEG，而不是直接拒绝。
+    if (mime.indexOf('image/') === 0 || IMAGE_EXT.indexOf(ext) >= 0) return 'image';
     if (TEXT_EXT.indexOf(ext) >= 0 || mime.indexOf('text/') === 0) return 'text';
     if (mime === 'application/json' || mime === 'application/xml') return 'text';
     return 'unsupported';
+  }
+
+  /* ---------------- 图片读取与压缩 ---------------- */
+
+  function fileToDataUrl(file, onDone, onFail) {
+    var fr = new FileReader();
+    fr.onload = function () {
+      onDone(String(fr.result));
+    };
+    fr.onerror = function () {
+      onFail();
+    };
+    fr.readAsDataURL(file);
+  }
+
+  /**
+   * 用 canvas 把图片重画成 JPEG：既能兼容 HEIC 等浏览器能解码但接口不收的格式，
+   * 也能把手机大图缩小，避免请求过大。失败时回调 onFail，由调用方决定回退策略。
+   */
+  function shrinkImage(file, onDone, onFail) {
+    if (typeof window.createImageBitmap !== 'function') {
+      onFail();
+      return;
+    }
+    window
+      .createImageBitmap(file)
+      .then(function (bitmap) {
+        var scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(bitmap.width, bitmap.height));
+        var w = Math.max(1, Math.round(bitmap.width * scale));
+        var h = Math.max(1, Math.round(bitmap.height * scale));
+        var canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        if (!ctx) {
+          onFail();
+          return;
+        }
+        ctx.drawImage(bitmap, 0, 0, w, h);
+        if (bitmap.close) bitmap.close();
+        canvas.toBlob(
+          function (blob) {
+            if (!blob) {
+              onFail();
+              return;
+            }
+            fileToDataUrl(blob, onDone, onFail);
+          },
+          'image/jpeg',
+          0.85
+        );
+      })
+      .catch(function () {
+        onFail();
+      });
   }
 
   function miniBtn(label, title, onClick, danger) {
@@ -118,6 +177,42 @@
     if (danger) btn.style.color = 'var(--warn)';
     return btn;
   }
+
+  /* ---------------- 自检与错误提示 ---------------- */
+
+  var APP_VERSION = 'v6';
+
+  function showAlert(text) {
+    var el = $('app-alert');
+    if (!el) return;
+    el.hidden = false;
+    el.textContent = text;
+  }
+
+  window.addEventListener('error', function (event) {
+    showAlert(
+      '页面脚本出错：' +
+        (event.message || '未知错误') +
+        '。请按 Ctrl + F5（Mac：Cmd + Shift + R）强制刷新一次再试。'
+    );
+  });
+
+  (function selfCheck() {
+    var required = [
+      'screen-home', 'screen-roadmap', 'screen-chat', 'screen-notes',
+      'roadmap-list', 'note-list', 'attach-zone', 'attach-btn', 'attach-input',
+      'chat-send', 'chat-log', 'chat-input'
+    ];
+    var missing = required.filter(function (id) {
+      return !$(id);
+    });
+    if (missing.length) {
+      showAlert(
+        '页面文件不完整（缺少：' + missing.join('、') + '），几乎可以确定是浏览器缓存了旧版本。' +
+          '请按 Ctrl + F5（Mac：Cmd + Shift + R）强制刷新一次。'
+      );
+    }
+  })();
 
   /* ---------------- 界面切换：主界面 ↔ 子界面 ---------------- */
 
@@ -420,11 +515,15 @@
 
   var pending = [];
 
-  function setAttachStatus(text) {
-    $('attach-status').textContent = text || ATTACH_HINT;
-    if (text) {
+  function setAttachStatus(text, sticky) {
+    var el = $('attach-status');
+    if (!el) return;
+    el.textContent = text || ATTACH_HINT;
+    el.classList.toggle('warn', !!text);
+    if (text && !sticky) {
       window.setTimeout(function () {
-        $('attach-status').textContent = ATTACH_HINT;
+        el.textContent = ATTACH_HINT;
+        el.classList.remove('warn');
       }, 8000);
     }
   }
@@ -446,7 +545,12 @@
 
       var name = document.createElement('span');
       name.className = 'attach-name';
-      name.textContent = att.name + ' · ' + humanSize(att.size) + (att.kind === 'image' ? ' · 图片' : ' · 文本');
+      name.textContent =
+        att.name +
+        ' · ' +
+        humanSize(att.size) +
+        (att.kind === 'image' ? ' · 图片' : ' · 文本') +
+        (att.note ? '（' + att.note + '）' : '');
       li.appendChild(name);
 
       var rm = document.createElement('button');
@@ -476,7 +580,7 @@
     function step() {
       if (stopped || !queue.length) {
         renderPending();
-        setAttachStatus(notesOut.join('；'));
+        setAttachStatus(notesOut.join('；'), notesOut.length > 0);
         return;
       }
       if (pending.length >= MAX_ATTACH) {
@@ -496,21 +600,65 @@
       }
 
       if (kind === 'image') {
-        if (file.size > MAX_IMAGE_BYTES) {
-          notesOut.push('图片「' + file.name + '」超过 ' + humanSize(MAX_IMAGE_BYTES) + '，请先压缩或截图后再传');
+        var supportedType = IMAGE_MIME.indexOf(file.type) >= 0;
+
+        var accept = function (dataUrl, note) {
+          pending.push({
+            id: uid(),
+            name: file.name,
+            size: file.size,
+            kind: 'image',
+            dataUrl: dataUrl,
+            note: note || ''
+          });
           step();
-          return;
+        };
+
+        var fallbackRaw = function () {
+          if (supportedType && file.size <= MAX_IMAGE_BYTES) {
+            fileToDataUrl(
+              file,
+              function (url) {
+                accept(url, '');
+              },
+              function () {
+                notesOut.push('读取「' + file.name + '」失败');
+                step();
+              }
+            );
+            return;
+          }
+          if (!supportedType) {
+            notesOut.push(
+              '「' + file.name + '」这种图片格式浏览器转不了（iPhone 照片的 HEIC 最常见），请在相册里导出成 JPEG 再上传'
+            );
+          } else {
+            notesOut.push('图片「' + file.name + '」超过 ' + humanSize(MAX_IMAGE_BYTES) + ' 且无法自动压缩，请先压缩');
+          }
+          step();
+        };
+
+        var needsWork = !supportedType || (file.size > SOFT_IMAGE_BYTES && file.type !== 'image/gif');
+        if (needsWork) {
+          shrinkImage(
+            file,
+            function (url) {
+              accept(url, '已自动压缩');
+            },
+            fallbackRaw
+          );
+        } else if (file.size > MAX_IMAGE_BYTES) {
+          notesOut.push('图片「' + file.name + '」超过 ' + humanSize(MAX_IMAGE_BYTES) + '，请先压缩后再传');
+          step();
+        } else {
+          fileToDataUrl(
+            file,
+            function (url) {
+              accept(url, '');
+            },
+            fallbackRaw
+          );
         }
-        var ir = new FileReader();
-        ir.onload = function () {
-          pending.push({ id: uid(), name: file.name, size: file.size, kind: 'image', dataUrl: String(ir.result) });
-          step();
-        };
-        ir.onerror = function () {
-          notesOut.push('读取「' + file.name + '」失败');
-          step();
-        };
-        ir.readAsDataURL(file);
         return;
       }
 
@@ -544,29 +692,33 @@
     step();
   }
 
-  $('attach-btn').addEventListener('click', function () {
-    $('attach-input').click();
-  });
-  $('attach-input').addEventListener('change', function (e) {
-    addFiles(e.target.files);
-    e.target.value = '';
-  });
+  if ($('attach-btn') && $('attach-input')) {
+    $('attach-btn').addEventListener('click', function () {
+      $('attach-input').click();
+    });
+    $('attach-input').addEventListener('change', function (e) {
+      addFiles(e.target.files);
+      e.target.value = '';
+    });
+  }
 
   var zone = $('screen-chat');
-  ['dragenter', 'dragover'].forEach(function (evt) {
-    zone.addEventListener(evt, function (e) {
-      e.preventDefault();
-      zone.classList.add('drop-active');
+  if (zone) {
+    ['dragenter', 'dragover'].forEach(function (evt) {
+      zone.addEventListener(evt, function (e) {
+        e.preventDefault();
+        zone.classList.add('drop-active');
+      });
     });
-  });
-  zone.addEventListener('dragleave', function (e) {
-    if (!zone.contains(e.relatedTarget)) zone.classList.remove('drop-active');
-  });
-  zone.addEventListener('drop', function (e) {
-    e.preventDefault();
-    zone.classList.remove('drop-active');
-    if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
-  });
+    zone.addEventListener('dragleave', function (e) {
+      if (!zone.contains(e.relatedTarget)) zone.classList.remove('drop-active');
+    });
+    zone.addEventListener('drop', function (e) {
+      e.preventDefault();
+      zone.classList.remove('drop-active');
+      if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+    });
+  }
 
   /* ---------------- ② 向 AI 提问：对话 ---------------- */
 
@@ -966,4 +1118,5 @@
   renderNotes();
   renderFooter();
   setAttachStatus('');
+  window.__aiStudyReady = true;
 })();

@@ -37,9 +37,14 @@
 
 | 类型 | 支持情况 | 说明 |
 | --- | --- | --- |
-| 图片 | ✅ png / jpg / jpeg / gif / webp | 以 base64 随问题一起发给模型（OpenAI 兼容的 `image_url` 块）。单张上限 8 MB。 |
+| 图片 | ✅ png / jpg / jpeg / gif / webp | 直接按 base64 发送（OpenAI 兼容的 `image_url` 块）。 |
+| 图片（其他格式） | ✅ 浏览器能解码的都行（BMP / TIFF / AVIF / SVG 等） | 会自动用 canvas 转成 JPEG 再发送。 |
+| 大图 | ✅ 超过 3 MB 自动压缩 | 缩到最长边 1600 像素、JPEG 质量 0.85；实测 8 MB 的照片会压到 1 MB 以内。 |
+| iPhone 的 HEIC | ⚠️ 看浏览器 | Safari 能解码 HEIC，会自动转成 JPEG；Chrome/Edge 解不了，会提示你在相册里导出成 JPEG。 |
 | 文本类文件 | ✅ txt / md / csv / json / 各类代码 | 在浏览器里读取文字，作为「【附件：文件名】+ 内容」拼进问题。单文件上限 1 MB，最多带入 2 万字符。 |
 | PDF / Word / PPT | ❌ 暂不支持 | 接口的 Files API 只收图片。请**截图后按图片上传**，或把关键段落复制进问题。 |
+
+被拒绝或自动处理的文件会在附件区显示说明文字，不会静默失败。
 
 模型与图片的关系（重要）：
 

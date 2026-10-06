@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>AI 学习管理</title>
     <meta name="description" content="管理人工智能专业的学习：学习路线、向 AI 提问、学习笔记" />
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="style.css?v=6" />
     <link rel="icon" href="data:," />
   </head>
   <body>
@@ -18,6 +18,8 @@
     </header>
 
     <main id="main">
+      <div class="alert" id="app-alert" hidden></div>
+
       <!-- ============ 主界面：三个正方形入口 ============ -->
       <section class="screen is-active" id="screen-home">
         <div class="tiles">
@@ -203,8 +205,21 @@
         <input id="data-file" type="file" accept="application/json,.json" hidden />
       </div>
       <p class="sub" id="footer-status"></p>
+      <p class="sub" id="footer-version">页面版本 v6</p>
     </footer>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=6"></script>
+    <script>
+      // 如果 app.js 没被加载或执行（最常见的原因：浏览器缓存了旧文件），
+      // 这段内联脚本不依赖任何外部文件，仍然能给出提示。
+      window.addEventListener('load', function () {
+        if (window.__aiStudyReady) return;
+        var el = document.getElementById('app-alert');
+        if (!el) return;
+        el.hidden = false;
+        el.textContent =
+          '页面脚本没有正常加载：很可能浏览器缓存了旧版本的文件。请按 Ctrl + F5（Mac 上是 Cmd + Shift + R）强制刷新一次；手机上请清除该网站的数据后重开。';
+      });
+    </script>
   </body>
 </html>
