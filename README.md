@@ -1,6 +1,54 @@
-# 个人网站（静态版）
+# AI 学习管理（静态网页）
 
-一个纯静态的个人网站模板：没有构建步骤、没有依赖、没有框架，`index.html` + `style.css` 就是全部。
+一个用来管理自己人工智能专业学习的小网站：没有构建步骤、没有后端、没有依赖，三个文件就是全部。
+所有数据保存在你自己浏览器的 localStorage 里，不上传服务器。
+
+## 三个板块
+
+| 板块 | 作用 |
+| --- | --- |
+| ① 学习路线 | 把整条学习路线拆成若干阶段，每个阶段可标记「未开始 / 学习中 / 已完成」，顶部有进度条，一眼看出学到哪、下一步学什么。可增删、上下移动。 |
+| ② 向 AI 提问 | 一个对话窗口，直接调用大模型 API 回答你的学习问题。回答会留在页面上，成为你的资料。 |
+| ③ 学习笔记 | 随手记录知识点、卡住的地方，可加标签、可搜索、可删除。 |
+
+底部还有 **导出备份 / 导入备份**（JSON 文件），用于换电脑或清缓存前保存数据。
+
+## 使用第 ② 板块（需要一次设置）
+
+纯静态网页没有后端，所以浏览器会**直接用你自己的 API Key** 调用模型接口。
+
+1. 打开 <https://platform.deepseek.com/api_keys>，注册并创建一个 API Key（形如 `sk-...`）。
+2. 在网页里展开「AI 设置」，把 Key 粘进去，点「保存到本机」。
+3. 之后就能直接在输入框提问了。
+
+默认接口 `https://api.deepseek.com`、模型 `deepseek-chat`，都可以在设置里改
+（任何 OpenAI 兼容接口都可以，例如换成 Kimi 的 `https://api.moonshot.cn/v1`）。
+
+### 安全须知（重要）
+
+- Key 只保存在**你自己浏览器的 localStorage** 里，不会写进网页文件，也不会随代码上传。
+- ⚠️ **绝对不要**把 Key 写进 `app.js` / `index.html`。这个仓库是公开的，写进去等于公开泄露。
+- 公用电脑上用完请点「清除 Key」。
+- 费用按用量计算；DeepSeek 的价格很低，日常学习提问花费很少。
+
+## 数据存在哪里
+
+| 内容 | 存放位置 |
+| --- | --- |
+| 学习路线 / 对话记录 / 笔记 | 你浏览器的 localStorage（键名 `aiStudy.*.v1`） |
+| API Key | 同上，且**不会**被导出到备份文件里 |
+
+也就是说：**换浏览器、换电脑、清理浏览器缓存都会看不到数据**，重要内容请用「导出备份」保存。
+导出的 JSON 里不含 API Key，可以安全地放进网盘。
+
+## 文件
+
+| 文件 | 作用 |
+| --- | --- |
+| `index.html` | 页面结构（三个板块） |
+| `style.css` | 全部样式，配色集中在文件开头 `:root` |
+| `app.js` | 全部逻辑：路线、对话、笔记、本地存储、导入导出 |
+| `.nojekyll` | 让 GitHub Pages 跳过 Jekyll 处理 |
 
 ## 当前部署
 
@@ -11,62 +59,6 @@
 | 站点地址 | https://ayaji-neinei.github.io/HeZicheng.github.io/ |
 
 注意：仓库名 `HeZicheng.github.io` 与账号名 `Ayaji-neinei` 不一致，所以它是**项目站点**，网址里带仓库名。
-想要最短网址 `https://ayaji-neinei.github.io/`，需要把仓库名改成与账号完全一致的 `Ayaji-neinei.github.io`。
 
-首次发布需在仓库 **Settings → Pages → Source: Deploy from a branch → main → / (root) → Save** 保存一次。
-
-## 文件
-
-| 文件 | 作用 |
-| --- | --- |
-| `index.html` | 页面结构：顶栏、首屏（名字 + 一句话简介）、关于我、我的作品、联系方式、页脚 |
-| `style.css` | 全部样式。主色、间距、字号集中在文件开头的 `:root` 变量里 |
-| `.nojekyll` | 告诉 GitHub Pages 不要用 Jekyll 处理这个目录 |
-
-## 本地预览
-
-直接双击 `index.html` 就能看。想用本地服务器（行为和线上更接近）：
-
-```bash
-python -m http.server 8000
-# 然后打开 http://127.0.0.1:8000
-```
-
-## 部署到 GitHub Pages
-
-1. 在 GitHub 上新建一个仓库，例如 `my-site`（**公开**仓库才能免费用 Pages；私有仓库需要 Pro）。
-2. 在本目录里初始化并推送：
-
-   ```bash
-   git init
-   git add .
-   git commit -m "Add personal website"
-   git branch -M main
-   git remote add origin https://github.com/<你的用户名>/my-site.git
-   git push -u origin main
-   ```
-
-3. 打开仓库的 **Settings → Pages**，把 **Source** 设为 `Deploy from a branch`，
-   **Branch** 选 `main`、目录选 `/ (root)`，保存。
-4. 等一两分钟，网址就是：
-
-   ```
-   https://<你的用户名>.github.io/my-site/
-   ```
-
-### 想要更短的网址
-
-把仓库名取成 `<你的用户名>.github.io`（例如 `zhangsan.github.io`），网址就直接是：
-
-```
-https://<你的用户名>.github.io/
-```
-
-## 改成你自己的内容
-
-- `index.html` 里搜 `你的名字`、`一句话介绍你自己`、`you@example.com`、`your-name`，全部替换即可。
-- 顶栏导航链接对应页面里的 `#about`、`#work`、`#contact` 三个分区，增删栏目时两处一起改。
-- 作品卡片是三个 `<li class="card">`，想要几个就复制或删除几行。
-- 主题色改 `style.css` 里 `:root` 的 `--accent`；不想要深色模式，删掉 `@media (prefers-color-scheme: dark)` 整段。
-- 换头像：把 `.avatar` 那个圆点换成一个 `<img>`，例如
-  `<img class="avatar" src="avatar.jpg" alt="你的名字" />`，再给 `.avatar` 加上 `object-fit: cover;`。
+本地预览：在该目录执行 `python -m http.server 8000`，然后打开 <http://127.0.0.1:8000>。
+直接双击 `index.html` 也可以，但用本地服务器更接近线上行为（`localStorage` 在 `file://` 下同样可用）。

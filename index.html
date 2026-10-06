@@ -3,11 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>你的名字 · 个人网站</title>
-    <meta name="description" content="你的名字的个人网站" />
-    <!-- 想让链接分享时更好看，把下面这行换成你自己的域名后再打开
-    <meta property="og:title" content="你的名字 · 个人网站" />
-    -->
+    <title>AI 学习管理</title>
+    <meta name="description" content="管理人工智能专业的学习：学习路线、向 AI 提问、学习笔记" />
     <link rel="stylesheet" href="style.css" />
     <link rel="icon" href="data:," />
   </head>
@@ -15,66 +12,178 @@
     <a class="skip-link" href="#main">跳到正文</a>
 
     <header class="site-header">
-      <nav class="nav" aria-label="主导航">
-        <a class="brand" href="#top">你的名字</a>
-        <ul class="nav-links">
-          <li><a href="#about">关于我</a></li>
-          <li><a href="#work">我的作品</a></li>
-          <li><a href="#contact">联系方式</a></li>
-        </ul>
-      </nav>
+      <div class="bar">
+        <span class="brand">AI 学习管理</span>
+        <nav class="tabs" aria-label="板块切换">
+          <button class="tab is-active" type="button" data-tab="roadmap">① 学习路线</button>
+          <button class="tab" type="button" data-tab="chat">② 向 AI 提问</button>
+          <button class="tab" type="button" data-tab="notes">③ 学习笔记</button>
+        </nav>
+      </div>
     </header>
 
     <main id="main">
-      <!-- 首屏：换掉这里的名字和一句话简介即可 -->
-      <section class="hero" id="top">
-        <div class="avatar" aria-hidden="true"></div>
-        <h1>你的名字</h1>
-        <p class="tagline">一句话介绍你自己。</p>
-      </section>
+      <!-- ===================== ① 学习路线 ===================== -->
+      <section class="panel is-active" id="panel-roadmap" aria-labelledby="h-roadmap">
+        <div class="panel-head">
+          <h1 id="h-roadmap">我的学习路线</h1>
+          <p class="sub" id="roadmap-summary">还没有阶段</p>
+        </div>
 
-      <section class="section" id="about">
-        <h2>关于我</h2>
-        <p>
-          这里写一段自我介绍：你在做什么、关心什么、最近在学什么。
-          两三句话就够，剩下的留给需要的人来问你。
+        <div class="progress" role="img" aria-label="学习进度">
+          <span id="roadmap-bar" style="width: 0%"></span>
+        </div>
+
+        <div class="row">
+          <input
+            id="stage-input"
+            type="text"
+            placeholder="添加一个学习阶段，例如：Transformer 原理"
+            aria-label="新学习阶段"
+          />
+          <button class="btn primary" type="button" id="stage-add">添加</button>
+        </div>
+
+        <p class="hint">
+          点状态标签可以在「未开始 → 学习中 → 已完成」之间切换；这就是你"学到哪了"的记录。
         </p>
+
+        <ul class="stages" id="roadmap-list"></ul>
+        <p class="empty" id="roadmap-empty" hidden>还没有阶段，先在上面添加一条吧。</p>
+
+        <details class="card">
+          <summary>怎么用这个板块</summary>
+          <p>
+            建议把整条路线拆成 6～10 个阶段，只保留<strong>当前正在学</strong>的那一个为「学习中」。
+            一眼就能看出：学到哪了、下一步该学什么。
+          </p>
+        </details>
       </section>
 
-      <section class="section" id="work">
-        <h2>我的作品</h2>
-        <ul class="cards">
-          <li class="card">
-            <h3>项目一</h3>
-            <p>一句话说明它是什么、解决了什么问题。</p>
-          </li>
-          <li class="card">
-            <h3>项目二</h3>
-            <p>一句话说明它是什么、解决了什么问题。</p>
-          </li>
-          <li class="card">
-            <h3>项目三</h3>
-            <p>一句话说明它是什么、解决了什么问题。</p>
-          </li>
-        </ul>
+      <!-- ===================== ② 向 AI 提问 ===================== -->
+      <section class="panel" id="panel-chat" aria-labelledby="h-chat">
+        <div class="panel-head">
+          <h1 id="h-chat">向 AI 提问</h1>
+          <p class="sub">关于学习的任何问题都可以问，回答会留在下面成为你的资料。</p>
+        </div>
+
+        <div class="notice" id="chat-notice">
+          还没填 API Key，所以暂时不会真的回答。填一次 Key 就能用了（只保存在你本机浏览器里，
+          不会上传到 GitHub）。也可以先用「复制问题」把问题贴到你平时用的 AI 里。
+        </div>
+
+        <details class="card" id="settings-card">
+          <summary>AI 设置（第一次使用需要填一次）</summary>
+          <ol class="steps">
+            <li>
+              打开
+              <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer"
+                >platform.deepseek.com/api_keys</a
+              >
+              注册并创建一个 API Key（形如 <code>sk-...</code>）。
+            </li>
+            <li>把 Key 粘贴到下面，点「保存到本机」。</li>
+            <li>回到下面的输入框提问即可。费用按用量计，学习用途通常很少。</li>
+          </ol>
+
+          <label class="field">
+            <span>API Key</span>
+            <input id="api-key" type="password" autocomplete="off" placeholder="sk-..." />
+          </label>
+
+          <div class="row">
+            <label class="field">
+              <span>接口地址</span>
+              <input id="api-base" type="text" placeholder="https://api.deepseek.com" />
+            </label>
+            <label class="field">
+              <span>模型</span>
+              <input id="api-model" type="text" placeholder="deepseek-chat" />
+            </label>
+          </div>
+
+          <div class="row">
+            <button class="btn primary" type="button" id="api-save">保存到本机</button>
+            <button class="btn" type="button" id="api-clear">清除 Key</button>
+            <span class="status" id="api-status"></span>
+          </div>
+
+          <p class="hint">
+            Key 保存在这台电脑的浏览器缓存里（localStorage），不会写进网页文件、不会上传。
+            公用电脑上用完请点「清除 Key」。
+          </p>
+        </details>
+
+        <div class="chat-log" id="chat-log" aria-live="polite"></div>
+
+        <div class="quick">
+          <button class="chip" type="button" data-prompt="用我能懂的话解释这个概念，并给一个生活中的类比：">
+            解释概念
+          </button>
+          <button class="chip" type="button" data-prompt="根据我正在学的阶段，给我一道难度适中的练习题，先不要给答案：">
+            给我练习
+          </button>
+          <button class="chip" type="button" data-prompt="我卡在这里了，请帮我判断是哪个前置知识没打牢，并给出补课顺序：">
+            帮我排查卡点
+          </button>
+        </div>
+
+        <label class="sr-only" for="chat-input">你的问题</label>
+        <textarea
+          id="chat-input"
+          rows="3"
+          placeholder="问一个学习问题，例如：反向传播到底在算什么？用一个小例子说明。"
+        ></textarea>
+
+        <div class="row">
+          <button class="btn primary" type="button" id="chat-send">发送</button>
+          <button class="btn" type="button" id="chat-copy">复制问题</button>
+          <button class="btn" type="button" id="chat-clear">清空对话</button>
+          <span class="status" id="chat-status"></span>
+        </div>
       </section>
 
-      <section class="section" id="contact">
-        <h2>联系方式</h2>
-        <p>
-          邮箱：<a href="mailto:you@example.com">you@example.com</a><br />
-          GitHub：<a href="https://github.com/your-name">github.com/your-name</a>
-        </p>
+      <!-- ===================== ③ 学习笔记 ===================== -->
+      <section class="panel" id="panel-notes" aria-labelledby="h-notes">
+        <div class="panel-head">
+          <h1 id="h-notes">学习笔记</h1>
+          <p class="sub" id="notes-summary">还没有笔记</p>
+        </div>
+
+        <label class="sr-only" for="note-input">笔记内容</label>
+        <textarea
+          id="note-input"
+          rows="3"
+          placeholder="随手记：今天学到的知识点、卡住的地方、想问的问题……（Ctrl + Enter 快速添加）"
+        ></textarea>
+
+        <div class="row">
+          <input id="note-tag" type="text" placeholder="标签（可选），例如：反向传播 / 待查" aria-label="标签" />
+          <button class="btn primary" type="button" id="note-add">添加笔记</button>
+        </div>
+
+        <div class="row">
+          <input id="note-search" type="text" placeholder="搜索笔记内容或标签" aria-label="搜索笔记" />
+        </div>
+
+        <ul class="notes" id="note-list"></ul>
+        <p class="empty" id="notes-empty" hidden>还没有笔记。</p>
       </section>
     </main>
 
     <footer class="site-footer">
-      <p>© <span id="year">2026</span> 你的名字</p>
+      <p class="sub">
+        所有内容（路线 / 对话 / 笔记）只保存在这台电脑的浏览器里，不会上传到 GitHub。
+        换电脑或清缓存前，记得导出备份。
+      </p>
+      <div class="row center">
+        <button class="btn" type="button" id="data-export">导出备份</button>
+        <button class="btn" type="button" id="data-import">导入备份</button>
+        <input id="data-file" type="file" accept="application/json,.json" hidden />
+      </div>
+      <p class="sub" id="footer-status"></p>
     </footer>
 
-    <script>
-      // 让年份自动跟上，不想用脚本可以删掉这一段
-      document.getElementById('year').textContent = new Date().getFullYear();
-    </script>
+    <script src="app.js"></script>
   </body>
 </html>
