@@ -89,16 +89,29 @@
             <input id="api-key" type="password" autocomplete="off" placeholder="sk-..." />
           </label>
 
-          <div class="row">
-            <label class="field">
-              <span>接口地址</span>
-              <input id="api-base" type="text" placeholder="https://api.deepseek.com" />
-            </label>
-            <label class="field">
-              <span>模型</span>
-              <input id="api-model" type="text" placeholder="deepseek-chat" />
-            </label>
+          <label class="field">
+            <span>接口地址</span>
+            <input id="api-base" type="text" placeholder="https://api.deepseek.com" />
+          </label>
+
+          <label class="field">
+            <span>模型</span>
+            <input id="api-model" type="text" placeholder="deepseek-flash" />
+          </label>
+
+          <div class="presets">
+            <button class="chip" type="button" data-model="deepseek-flash">
+              deepseek-flash · 便宜、支持图片
+            </button>
+            <button class="chip" type="button" data-model="deepseek-v4-pro">
+              deepseek-v4-pro · 更强、不支持图片
+            </button>
           </div>
+
+          <label class="check">
+            <input id="api-thinking" type="checkbox" />
+            <span>深度思考：难题时打开（更慢更贵，但推理更准）</span>
+          </label>
 
           <div class="row">
             <button class="btn primary" type="button" id="api-save">保存到本机</button>
@@ -126,11 +139,20 @@
           </button>
         </div>
 
+        <div class="attach" id="attach-zone">
+          <div class="row">
+            <button class="btn" type="button" id="attach-btn">＋ 添加图片 / 文件</button>
+            <input id="attach-input" type="file" multiple hidden />
+            <span class="status" id="attach-status"></span>
+          </div>
+          <ul class="attach-list" id="attach-list"></ul>
+        </div>
+
         <label class="sr-only" for="chat-input">你的问题</label>
         <textarea
           id="chat-input"
           rows="3"
-          placeholder="问一个学习问题，例如：反向传播到底在算什么？用一个小例子说明。"
+          placeholder="问一个学习问题，例如：反向传播到底在算什么？也可以把题目截图拖进来问。"
         ></textarea>
 
         <div class="row">

@@ -15,9 +15,27 @@
 
   var STATUS_TEXT = { todo: '未开始', doing: '学习中', done: '已完成' };
   var STATUS_ORDER = ['todo', 'doing', 'done'];
-  var DEFAULT_BASE = 'https://api.deepseek.com';
-  var DEFAULT_MODEL = 'deepseek-chat';
   var SCREENS = ['home', 'roadmap', 'chat', 'notes'];
+
+  var DEFAULT_BASE = 'https://api.deepseek.com';
+  var DEFAULT_MODEL = 'deepseek-flash';
+  var OLD_MODELS = ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v4-flash', 'deepseek-v4-flash-vision-exp'];
+
+  var ATTACH_HINT =
+    '支持图片（png / jpg / gif / webp）和文本类文件（txt / md / csv / json / 代码）。可拖拽到这一块，或直接在输入框里 Ctrl+V 粘贴截图。';
+
+  var IMAGE_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+  var IMAGE_MIME = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+  var TEXT_EXT = [
+    'txt', 'md', 'markdown', 'csv', 'tsv', 'json', 'log', 'yml', 'yaml', 'ini', 'conf', 'cfg',
+    'xml', 'html', 'htm', 'css', 'js', 'mjs', 'cjs', 'ts', 'jsx', 'tsx', 'py', 'java', 'c', 'h',
+    'cpp', 'hpp', 'cs', 'go', 'rs', 'rb', 'php', 'sh', 'bat', 'sql', 'r', 'm', 'ipynb', 'tex', 'srt', 'vtt'
+  ];
+  var MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 单张图片上限（接口上限 32 MiB，这里保守些）
+  var MAX_FILE_BYTES = 1024 * 1024; // 文本文件上限
+  var MAX_TEXT_CHARS = 20000; // 单个文本文件最多带入的字符数
+  var MAX_ATTACH = 10; // 一次最多附件数
+  var MAX_REASON_CHARS = 5000; // 思考过程最多保存的字符数
 
   var DEFAULT_ROADMAP = [
     '数学基础：线性代数、概率统计、微积分',
@@ -33,6 +51,7 @@
     '你是一位耐心、务实的 AI 学习助教，辅导一名人工智能专业的本科学生。' +
     '回答要求：先给一句话结论，再分点讲清楚；能用小例子或类比就用；' +
     '最后给出可执行的下一步（学什么、练什么、大概花多久）。' +
+    '如果学生附上了图片或文件，先说明你从中看到的关键信息，再回答。' +
     '避免空话和鸡汤，也避免超出问题范围的扩展。';
 
   function $(id) {
@@ -66,6 +85,38 @@
       return n < 10 ? '0' + n : String(n);
     }
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  function humanSize(bytes) {
+    if (!bytes && bytes !== 0) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
+    return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+  }
+
+  function extOf(name) {
+    var i = String(name).lastIndexOf('.');
+    return i < 0 ? '' : String(name).slice(i + 1).toLowerCase();
+  }
+
+  function kindOf(file) {
+    var ext = extOf(file.name);
+    var mime = file.type || '';
+    if (IMAGE_MIME.indexOf(mime) >= 0 || IMAGE_EXT.indexOf(ext) >= 0) return 'image';
+    if (TEXT_EXT.indexOf(ext) >= 0 || mime.indexOf('text/') === 0) return 'text';
+    if (mime === 'application/json' || mime === 'application/xml') return 'text';
+    return 'unsupported';
+  }
+
+  function miniBtn(label, title, onClick, danger) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn mini';
+    btn.textContent = label;
+    btn.title = title;
+    btn.addEventListener('click', onClick);
+    if (danger) btn.style.color = 'var(--warn)';
+    return btn;
   }
 
   /* ---------------- 界面切换：主界面 ↔ 子界面 ---------------- */
@@ -107,17 +158,6 @@
 
   function saveRoadmap() {
     save(KEYS.roadmap, roadmap);
-  }
-
-  function miniBtn(label, title, onClick, danger) {
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn mini';
-    btn.textContent = label;
-    btn.title = title;
-    btn.addEventListener('click', onClick);
-    if (danger) btn.style.color = 'var(--warn)';
-    return btn;
   }
 
   function renderRoadmap() {
@@ -304,15 +344,19 @@
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') addNote();
   });
 
-  /* ---------------- ② 向 AI 提问 ---------------- */
+  /* ---------------- ② 向 AI 提问：设置 ---------------- */
 
   var chat = load(KEYS.chat, []);
   if (!Array.isArray(chat)) chat = [];
 
   var settings = load(KEYS.settings, {});
   if (!settings.base) settings.base = DEFAULT_BASE;
-  if (!settings.model) settings.model = DEFAULT_MODEL;
+  if (!settings.model || OLD_MODELS.indexOf(settings.model) >= 0) settings.model = DEFAULT_MODEL; // 旧默认值迁移
+  if (typeof settings.thinking !== 'boolean') settings.thinking = false;
   if (typeof settings.key !== 'string') settings.key = '';
+
+  /** 仅存在于本次会话内存里的图片数据：消息 id -> [dataURL]。刷新后旧的图片不再随对话发送。 */
+  var sessionImages = {};
 
   function saveSettings() {
     save(KEYS.settings, settings);
@@ -321,19 +365,35 @@
   $('api-base').value = settings.base;
   $('api-model').value = settings.model;
   $('api-key').value = settings.key;
+  $('api-thinking').checked = settings.thinking;
+
+  function isDeepSeekBase() {
+    return (settings.base || '').toLowerCase().indexOf('deepseek') >= 0;
+  }
+
+  function modelLooksVisionless() {
+    var m = (settings.model || '').toLowerCase();
+    return m.indexOf('v4-pro') >= 0 || m.indexOf('deepseek-chat') >= 0 || m.indexOf('reasoner') >= 0;
+  }
 
   function refreshApiState() {
     var ready = !!settings.key;
     $('chat-notice').hidden = ready;
-    $('api-status').textContent = ready
-      ? '已就绪：' + settings.model + ' @ ' + settings.base
-      : '尚未填写 API Key';
+    if (!ready) {
+      $('api-status').textContent = '尚未填写 API Key';
+      return;
+    }
+    var bits = [settings.model + ' @ ' + settings.base];
+    if (settings.thinking) bits.push('深度思考已开');
+    if (modelLooksVisionless()) bits.push('该模型不支持图片');
+    $('api-status').textContent = '已就绪：' + bits.join(' · ');
   }
 
   $('api-save').addEventListener('click', function () {
     settings.base = $('api-base').value.trim() || DEFAULT_BASE;
     settings.model = $('api-model').value.trim() || DEFAULT_MODEL;
     settings.key = $('api-key').value.trim();
+    settings.thinking = !!$('api-thinking').checked;
     saveSettings();
     refreshApiState();
     $('chat-status').textContent = settings.key ? '已保存到本机浏览器' : '没有填写 Key';
@@ -350,9 +410,180 @@
     $('chat-status').textContent = '已清除本机保存的 Key';
   });
 
+  Array.prototype.slice.call(document.querySelectorAll('.presets .chip')).forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      $('api-model').value = chip.dataset.model;
+    });
+  });
+
+  /* ---------------- ② 向 AI 提问：附件 ---------------- */
+
+  var pending = [];
+
+  function setAttachStatus(text) {
+    $('attach-status').textContent = text || ATTACH_HINT;
+    if (text) {
+      window.setTimeout(function () {
+        $('attach-status').textContent = ATTACH_HINT;
+      }, 8000);
+    }
+  }
+
+  function renderPending() {
+    var list = $('attach-list');
+    list.textContent = '';
+    pending.forEach(function (att) {
+      var li = document.createElement('li');
+      li.className = 'attach-item';
+
+      if (att.kind === 'image' && att.dataUrl) {
+        var img = document.createElement('img');
+        img.className = 'attach-thumb';
+        img.src = att.dataUrl;
+        img.alt = att.name;
+        li.appendChild(img);
+      }
+
+      var name = document.createElement('span');
+      name.className = 'attach-name';
+      name.textContent = att.name + ' · ' + humanSize(att.size) + (att.kind === 'image' ? ' · 图片' : ' · 文本');
+      li.appendChild(name);
+
+      var rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'attach-remove';
+      rm.textContent = '×';
+      rm.title = '移除这个附件';
+      rm.addEventListener('click', function () {
+        pending = pending.filter(function (a) {
+          return a.id !== att.id;
+        });
+        renderPending();
+      });
+      li.appendChild(rm);
+
+      list.appendChild(li);
+    });
+    $('chat-send').disabled = sending;
+  }
+
+  function addFiles(fileList) {
+    var queue = Array.prototype.slice.call(fileList || []);
+    if (!queue.length) return;
+    var notesOut = [];
+    var stopped = false;
+
+    function step() {
+      if (stopped || !queue.length) {
+        renderPending();
+        setAttachStatus(notesOut.join('；'));
+        return;
+      }
+      if (pending.length >= MAX_ATTACH) {
+        notesOut.push('一次最多 ' + MAX_ATTACH + ' 个附件');
+        stopped = true;
+        step();
+        return;
+      }
+
+      var file = queue.shift();
+      var kind = kindOf(file);
+
+      if (kind === 'unsupported') {
+        notesOut.push('不支持「' + file.name + '」（目前只支持图片和文本类文件；PDF / Word 请截图上传，或把文字复制进问题）');
+        step();
+        return;
+      }
+
+      if (kind === 'image') {
+        if (file.size > MAX_IMAGE_BYTES) {
+          notesOut.push('图片「' + file.name + '」超过 ' + humanSize(MAX_IMAGE_BYTES) + '，请先压缩或截图后再传');
+          step();
+          return;
+        }
+        var ir = new FileReader();
+        ir.onload = function () {
+          pending.push({ id: uid(), name: file.name, size: file.size, kind: 'image', dataUrl: String(ir.result) });
+          step();
+        };
+        ir.onerror = function () {
+          notesOut.push('读取「' + file.name + '」失败');
+          step();
+        };
+        ir.readAsDataURL(file);
+        return;
+      }
+
+      if (file.size > MAX_FILE_BYTES) {
+        notesOut.push('文件「' + file.name + '」超过 ' + humanSize(MAX_FILE_BYTES) + '，请只截取需要的部分');
+        step();
+        return;
+      }
+      var tr = new FileReader();
+      tr.onload = function () {
+        var text = String(tr.result || '');
+        var cut = text.length > MAX_TEXT_CHARS;
+        pending.push({
+          id: uid(),
+          name: file.name,
+          size: file.size,
+          kind: 'text',
+          text: cut ? text.slice(0, MAX_TEXT_CHARS) : text,
+          truncated: cut
+        });
+        if (cut) notesOut.push('「' + file.name + '」太长，只带入前 ' + MAX_TEXT_CHARS + ' 个字符');
+        step();
+      };
+      tr.onerror = function () {
+        notesOut.push('读取「' + file.name + '」失败');
+        step();
+      };
+      tr.readAsText(file);
+    }
+
+    step();
+  }
+
+  $('attach-btn').addEventListener('click', function () {
+    $('attach-input').click();
+  });
+  $('attach-input').addEventListener('change', function (e) {
+    addFiles(e.target.files);
+    e.target.value = '';
+  });
+
+  var zone = $('screen-chat');
+  ['dragenter', 'dragover'].forEach(function (evt) {
+    zone.addEventListener(evt, function (e) {
+      e.preventDefault();
+      zone.classList.add('drop-active');
+    });
+  });
+  zone.addEventListener('dragleave', function (e) {
+    if (!zone.contains(e.relatedTarget)) zone.classList.remove('drop-active');
+  });
+  zone.addEventListener('drop', function (e) {
+    e.preventDefault();
+    zone.classList.remove('drop-active');
+    if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+  });
+
+  /* ---------------- ② 向 AI 提问：对话 ---------------- */
+
   function endpoint() {
     var base = (settings.base || DEFAULT_BASE).replace(/\/+$/, '');
     return /\/chat\/completions$/.test(base) ? base : base + '/chat/completions';
+  }
+
+  function attachmentChips(msg) {
+    var chips = [];
+    (msg.attachments || []).forEach(function (a) {
+      chips.push({ name: a.name, size: a.size, kind: 'image' });
+    });
+    (msg.files || []).forEach(function (f) {
+      chips.push({ name: f.name, size: f.size, kind: 'text' });
+    });
+    return chips;
   }
 
   function renderChat() {
@@ -361,36 +592,85 @@
     chat.forEach(function (msg) {
       var box = document.createElement('div');
       box.className = 'msg ' + msg.role;
+
       var role = document.createElement('span');
       role.className = 'msg-role';
       role.textContent =
         (msg.role === 'user' ? '你' : msg.role === 'assistant' ? 'AI 助教' : '出错了') + ' · ' + fmtTime(msg.at);
+      box.appendChild(role);
+
       var body = document.createElement('div');
       body.textContent = msg.content;
-      box.appendChild(role);
       box.appendChild(body);
+
+      var chips = attachmentChips(msg);
+      if (chips.length) {
+        var wrap = document.createElement('div');
+        wrap.className = 'msg-atts';
+        chips.forEach(function (chip) {
+          var item = document.createElement('span');
+          item.className = 'msg-att';
+          var label = document.createElement('span');
+          label.textContent = (chip.kind === 'image' ? '图片：' : '文件：') + chip.name + ' · ' + humanSize(chip.size);
+          item.appendChild(label);
+          wrap.appendChild(item);
+        });
+        var imgs = sessionImages[msg.id];
+        if (imgs && imgs.length) {
+          imgs.forEach(function (url) {
+            var thumb = document.createElement('span');
+            thumb.className = 'msg-att';
+            var img = document.createElement('img');
+            img.src = url;
+            img.alt = '附件图片';
+            thumb.appendChild(img);
+            wrap.appendChild(thumb);
+          });
+        }
+        box.appendChild(wrap);
+      }
+
+      if (msg.role === 'assistant' && msg.reasoning) {
+        var det = document.createElement('details');
+        det.className = 'reasoning';
+        var sum = document.createElement('summary');
+        sum.textContent = '查看思考过程';
+        var pre = document.createElement('div');
+        pre.className = 'reasoning-body';
+        pre.textContent = msg.reasoning;
+        det.appendChild(sum);
+        det.appendChild(pre);
+        box.appendChild(det);
+      }
+
       log.appendChild(box);
     });
     if (chat.length) window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
   }
 
   function buildMessages() {
-    var context = [];
     var doing = roadmap.filter(function (s) {
       return s.status === 'doing';
     });
     var done = roadmap.filter(function (s) {
       return s.status === 'done';
     });
-    context.push(
+    var context =
       '学生当前的学习状态：正在学「' +
-        (doing.length ? doing[0].title : '（未标记）') +
-        '」；已完成 ' +
-        done.length +
-        ' 个阶段' +
-        (done.length ? '（' + done.map(function (s) { return s.title.split('：')[0]; }).join('、') + '）' : '') +
-        '。'
-    );
+      (doing.length ? doing[0].title : '（未标记）') +
+      '」；已完成 ' +
+      done.length +
+      ' 个阶段' +
+      (done.length
+        ? '（' +
+          done
+            .map(function (s) {
+              return s.title.split('：')[0];
+            })
+            .join('、') +
+          '）'
+        : '') +
+      '。';
 
     var history = chat
       .filter(function (m) {
@@ -398,25 +678,76 @@
       })
       .slice(-12)
       .map(function (m) {
-        return { role: m.role, content: m.content };
+        var text = m.content || '';
+        if (m.role !== 'user') return { role: m.role, content: text };
+
+        (m.files || []).forEach(function (f) {
+          text += '\n\n【附件：' + f.name + '】\n' + f.text + (f.truncated ? '\n（附件过长，已截断）' : '');
+        });
+
+        var imgs = sessionImages[m.id];
+        if (imgs && imgs.length) {
+          var blocks = [{ type: 'text', text: text || '请看下面的图片并回答。' }];
+          imgs.forEach(function (url) {
+            blocks.push({ type: 'image_url', image_url: { url: url } });
+          });
+          return { role: 'user', content: blocks };
+        }
+        return { role: 'user', content: text };
       });
 
-    return [{ role: 'system', content: SYSTEM_PROMPT + context.join('') }].concat(history);
+    return [{ role: 'system', content: SYSTEM_PROMPT + context }].concat(history);
+  }
+
+  function requestBody() {
+    var body = { model: settings.model, messages: buildMessages(), stream: false };
+    if (isDeepSeekBase()) {
+      body.thinking = { type: settings.thinking ? 'enabled' : 'disabled' };
+      if (settings.thinking) body.reasoning_effort = 'high';
+    }
+    return body;
   }
 
   var sending = false;
 
   function sendQuestion() {
     if (sending) return;
+
     var input = $('chat-input');
     var text = input.value.trim();
-    if (!text) {
+    if (!text && pending.length === 0) {
       input.focus();
       return;
     }
 
-    chat.push({ role: 'user', content: text, at: Date.now() });
+    var msg = { id: uid(), role: 'user', content: text || '（请看下面的图片 / 附件）', at: Date.now() };
+    if (pending.length) {
+      var imgs = pending.filter(function (a) {
+        return a.kind === 'image';
+      });
+      var files = pending.filter(function (a) {
+        return a.kind === 'text';
+      });
+      if (files.length) {
+        msg.files = files.map(function (a) {
+          return { name: a.name, size: a.size, text: a.text, truncated: !!a.truncated };
+        });
+      }
+      if (imgs.length) {
+        msg.attachments = imgs.map(function (a) {
+          return { name: a.name, size: a.size, type: 'image' };
+        });
+        sessionImages[msg.id] = imgs.map(function (a) {
+          return a.dataUrl;
+        });
+      }
+    }
+
+    chat.push(msg);
     input.value = '';
+    pending = [];
+    renderPending();
+    setAttachStatus('');
     save(KEYS.chat, chat);
     renderChat();
 
@@ -425,9 +756,24 @@
       return;
     }
 
+    if (msg.attachments && msg.attachments.length && modelLooksVisionless()) {
+      chat.push({
+        role: 'error',
+        content:
+          '提示：当前模型「' +
+          settings.model +
+          '」不支持图片输入，图片不会被读到。请在「AI 设置」里把模型换成 deepseek-flash，再发一次带图的问题。',
+        at: Date.now()
+      });
+      save(KEYS.chat, chat);
+      renderChat();
+      return;
+    }
+
     sending = true;
     $('chat-send').disabled = true;
-    $('chat-status').textContent = '正在思考…';
+    renderPending();
+    $('chat-status').textContent = settings.thinking ? '正在深度思考…' : '正在思考…';
 
     fetch(endpoint(), {
       method: 'POST',
@@ -435,7 +781,7 @@
         'Content-Type': 'application/json',
         Authorization: 'Bearer ' + settings.key
       },
-      body: JSON.stringify({ model: settings.model, messages: buildMessages(), stream: false })
+      body: JSON.stringify(requestBody())
     })
       .then(function (res) {
         return res
@@ -449,17 +795,23 @@
                 (data && data.error && (data.error.message || data.error.type)) || 'HTTP ' + res.status;
               throw new Error(reason);
             }
-            var content =
-              data && data.choices && data.choices[0] && data.choices[0].message
-                ? data.choices[0].message.content
-                : '';
-            chat.push({ role: 'assistant', content: (content || '(没有返回内容)').trim(), at: Date.now() });
+            var message = data && data.choices && data.choices[0] ? data.choices[0].message : null;
+            var content = message ? message.content : '';
+            var reasoning = message && message.reasoning_content ? String(message.reasoning_content) : '';
+            var record = { role: 'assistant', content: (content || '(没有返回内容)').trim(), at: Date.now() };
+            if (reasoning) record.reasoning = reasoning.slice(0, MAX_REASON_CHARS);
+            chat.push(record);
           });
       })
       .catch(function (err) {
+        var extra =
+          msg.attachments && msg.attachments.length
+            ? '\n（带图片提问时，模型必须支持图片；deepseek-flash 支持，deepseek-v4-pro 不支持）'
+            : '';
         chat.push({
           role: 'error',
-          content: '请求失败：' + err.message + '\n（检查 Key 是否有效、余额是否足够、网络是否可访问该接口）',
+          content:
+            '请求失败：' + err.message + extra + '\n（检查 Key 是否有效、余额是否足够、网络是否可访问该接口）',
           at: Date.now()
         });
       })
@@ -476,8 +828,15 @@
   $('chat-input').addEventListener('keydown', function (e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') sendQuestion();
   });
+  $('chat-input').addEventListener('paste', function (e) {
+    var files = e.clipboardData && e.clipboardData.files;
+    if (files && files.length) {
+      e.preventDefault();
+      addFiles(files);
+    }
+  });
 
-  Array.prototype.slice.call(document.querySelectorAll('.chip')).forEach(function (chip) {
+  Array.prototype.slice.call(document.querySelectorAll('.quick .chip')).forEach(function (chip) {
     chip.addEventListener('click', function () {
       var input = $('chat-input');
       input.value = chip.dataset.prompt + input.value;
@@ -520,6 +879,7 @@
     if (chat.length === 0) return;
     if (!confirm('清空全部对话记录？')) return;
     chat = [];
+    sessionImages = {};
     save(KEYS.chat, chat);
     renderChat();
   });
@@ -544,7 +904,7 @@
       roadmap: roadmap,
       chat: chat,
       notes: notes,
-      settings: { base: settings.base, model: settings.model }
+      settings: { base: settings.base, model: settings.model, thinking: settings.thinking }
     };
     var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
@@ -605,4 +965,5 @@
   renderChat();
   renderNotes();
   renderFooter();
+  setAttachStatus('');
 })();
