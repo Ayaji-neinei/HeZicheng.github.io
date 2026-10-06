@@ -6,7 +6,7 @@
     <title>AI 学习管理</title>
     <meta name="description" content="管理人工智能专业的学习：学习路线、向 AI 提问、学习笔记" />
     <link rel="stylesheet" href="vendor/katex/katex.min.css?v=7" />
-    <link rel="stylesheet" href="style.css?v=8" />
+    <link rel="stylesheet" href="style.css?v=9" />
     <link rel="icon" href="data:," />
   </head>
   <body>
@@ -166,15 +166,30 @@
         </div>
       </section>
 
-      <!-- ============ 子界面 ③ 学习笔记 ============ -->
+      <!-- ============ 子界面 ③ 学习笔记（二级入口） ============ -->
       <section class="screen" id="screen-notes" aria-labelledby="h-notes">
         <div class="screen-head">
           <button class="btn back" type="button" data-screen="home">← 返回</button>
           <h1 id="h-notes">学习笔记</h1>
-          <p class="sub" id="notes-summary">还没有笔记</p>
+          <p class="sub">选一种方式记录</p>
         </div>
 
-        <label class="sr-only" for="note-input">笔记内容</label>
+        <div class="tiles">
+          <button class="tile" type="button" data-screen="notes-cards">学习卡片</button>
+          <button class="tile" type="button" data-screen="notes-handwriting">手写笔记</button>
+          <button class="tile" type="button" data-screen="notes-qa">AI问答笔记</button>
+        </div>
+      </section>
+
+      <!-- ---------- ③-1 学习卡片（原有功能） ---------- -->
+      <section class="screen" id="screen-notes-cards" aria-labelledby="h-notes-cards">
+        <div class="screen-head">
+          <button class="btn back" type="button" data-screen="notes">← 返回</button>
+          <h1 id="h-notes-cards">学习卡片</h1>
+          <p class="sub" id="notes-summary">还没有卡片</p>
+        </div>
+
+        <label class="sr-only" for="note-input">卡片内容</label>
         <textarea
           id="note-input"
           rows="3"
@@ -183,15 +198,82 @@
 
         <div class="row">
           <input id="note-tag" type="text" placeholder="标签（可选），例如：反向传播 / 待查" aria-label="标签" />
-          <button class="btn primary" type="button" id="note-add">添加笔记</button>
+          <button class="btn primary" type="button" id="note-add">添加卡片</button>
         </div>
 
         <div class="row">
-          <input id="note-search" type="text" placeholder="搜索笔记内容或标签" aria-label="搜索笔记" />
+          <input id="note-search" type="text" placeholder="搜索卡片内容或标签" aria-label="搜索卡片" />
         </div>
 
         <ul class="notes" id="note-list"></ul>
-        <p class="empty" id="notes-empty" hidden>还没有笔记。</p>
+        <p class="empty" id="notes-empty" hidden>还没有卡片。</p>
+      </section>
+
+      <!-- ---------- ③-2 手写笔记（框架） ---------- -->
+      <section class="screen" id="screen-notes-handwriting" aria-labelledby="h-handwriting">
+        <div class="screen-head">
+          <button class="btn back" type="button" data-screen="notes">← 返回</button>
+          <h1 id="h-handwriting">手写笔记</h1>
+          <p class="sub">用鼠标或手指直接写、画；内容自动保存在本机浏览器里。</p>
+        </div>
+
+        <div class="pad-toolbar">
+          <button class="btn primary" type="button" id="pad-pen">画笔</button>
+          <button class="btn" type="button" id="pad-eraser">橡皮</button>
+          <label class="field inline">
+            <span>粗细</span>
+            <input id="pad-size" type="range" min="1" max="24" step="1" value="3" />
+          </label>
+          <button class="btn" type="button" id="pad-undo">撤销</button>
+          <button class="btn" type="button" id="pad-clear">清空</button>
+          <button class="btn" type="button" id="pad-save">保存为图片</button>
+          <span class="status" id="pad-status"></span>
+        </div>
+
+        <div class="pad-wrap">
+          <canvas id="pad-canvas" width="1200" height="800" aria-label="手写画板"></canvas>
+        </div>
+
+        <p class="hint">
+          已自动保存笔画，下次打开还在。想留档就点「保存为图片」。
+          后续可以加：多页笔记、把某页插进学习卡片、手机上双指缩放。
+        </p>
+      </section>
+
+      <!-- ---------- ③-3 AI 问答笔记（框架） ---------- -->
+      <section class="screen" id="screen-notes-qa" aria-labelledby="h-qa">
+        <div class="screen-head">
+          <button class="btn back" type="button" data-screen="notes">← 返回</button>
+          <h1 id="h-qa">AI 问答笔记</h1>
+          <p class="sub" id="qa-summary">还没有问答笔记</p>
+        </div>
+
+        <div class="notice">
+          这里用来沉淀"问过什么、答案是什么"。现在是手动记录版本，
+          后续可以做成从「向 AI 提问」里<strong>一键收藏</strong>某轮问答。
+        </div>
+
+        <label class="field">
+          <span>问题</span>
+          <input id="qa-q" type="text" placeholder="例如：为什么反向传播要用链式法则？" />
+        </label>
+
+        <label class="field">
+          <span>答案 / 要点</span>
+          <textarea id="qa-a" rows="3" placeholder="把 AI 的回答要点，或你自己的总结写在这里"></textarea>
+        </label>
+
+        <div class="row">
+          <input id="qa-tag" type="text" placeholder="标签（可选），例如：反向传播" aria-label="标签" />
+          <button class="btn primary" type="button" id="qa-add">添加问答</button>
+        </div>
+
+        <div class="row">
+          <input id="qa-search" type="text" placeholder="搜索问题、答案或标签" aria-label="搜索问答" />
+        </div>
+
+        <ul class="notes" id="qa-list"></ul>
+        <p class="empty" id="qa-empty" hidden>还没有问答笔记。</p>
       </section>
     </main>
 
@@ -206,7 +288,7 @@
         <input id="data-file" type="file" accept="application/json,.json" hidden />
       </div>
       <p class="sub" id="footer-status"></p>
-      <p class="sub" id="footer-version">页面版本 v8</p>
+      <p class="sub" id="footer-version">页面版本 v9</p>
     </footer>
 
     <!-- 公式与 Markdown 渲染：全部放在本站内，不依赖外部 CDN -->
@@ -214,7 +296,7 @@
     <script src="vendor/purify.min.js?v=7"></script>
     <script src="vendor/katex/katex.min.js?v=7"></script>
     <script src="vendor/katex/auto-render.min.js?v=7"></script>
-    <script src="app.js?v=8"></script>
+    <script src="app.js?v=9"></script>
     <script>
       // 如果 app.js 没被加载或执行（最常见的原因：浏览器缓存了旧文件），
       // 这段内联脚本不依赖任何外部文件，仍然能给出提示。

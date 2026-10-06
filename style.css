@@ -853,6 +853,64 @@ summary:focus-visible {
   overflow: auto;
 }
 
+/* ---------- 手写画板 ---------- */
+
+.pad-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.field.inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.field.inline > span {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.field.inline input[type="range"] {
+  width: 120px;
+  accent-color: var(--accent);
+}
+
+.pad-wrap {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #ffffff;
+  overflow: hidden;
+}
+
+#pad-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 2;
+  touch-action: none;
+  cursor: crosshair;
+  background: #ffffff;
+}
+
+/* ---------- AI 问答笔记 ---------- */
+
+.qa-q {
+  margin-bottom: 6px;
+  font-weight: 600;
+  font-size: 15px;
+  word-break: break-word;
+}
+
+.qa-a {
+  color: var(--text-muted);
+}
+
 /* ---------- 页脚 ---------- */
 
 .site-footer {

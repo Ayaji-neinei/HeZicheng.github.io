@@ -10,12 +10,14 @@
     roadmap: 'aiStudy.roadmap.v1',
     chat: 'aiStudy.chat.v1',
     notes: 'aiStudy.notes.v1',
+    qa: 'aiStudy.qaNotes.v1',
+    pad: 'aiStudy.handwriting.v1',
     settings: 'aiStudy.settings.v1'
   };
 
   var STATUS_TEXT = { todo: '未开始', doing: '学习中', done: '已完成' };
   var STATUS_ORDER = ['todo', 'doing', 'done'];
-  var SCREENS = ['home', 'roadmap', 'chat', 'notes'];
+  var SCREENS = ['home', 'roadmap', 'chat', 'notes', 'notes-cards', 'notes-handwriting', 'notes-qa'];
 
   var DEFAULT_BASE = 'https://api.deepseek.com';
   var DEFAULT_MODEL = 'deepseek-flash';
@@ -218,7 +220,7 @@
 
   /* ---------------- 自检与错误提示 ---------------- */
 
-  var APP_VERSION = 'v8';
+  var APP_VERSION = 'v9';
 
   function showAlert(text) {
     var el = $('app-alert');
@@ -238,7 +240,9 @@
   (function selfCheck() {
     var required = [
       'screen-home', 'screen-roadmap', 'screen-chat', 'screen-notes',
-      'roadmap-list', 'note-list', 'attach-zone', 'attach-btn', 'attach-input',
+      'screen-notes-cards', 'screen-notes-handwriting', 'screen-notes-qa',
+      'roadmap-list', 'note-list', 'qa-list', 'pad-canvas',
+      'attach-zone', 'attach-btn', 'attach-input',
       'chat-send', 'chat-log', 'chat-input'
     ];
     var missing = required.filter(function (id) {
@@ -451,9 +455,9 @@
     });
 
     $('notes-empty').hidden = shown.length > 0;
-    $('notes-empty').textContent = notes.length === 0 ? '还没有笔记。' : '没有匹配的笔记。';
+    $('notes-empty').textContent = notes.length === 0 ? '还没有卡片。' : '没有匹配的卡片。';
     $('notes-summary').textContent =
-      notes.length === 0 ? '还没有笔记' : '共 ' + notes.length + ' 条笔记' + (query ? '（匹配 ' + shown.length + ' 条）' : '');
+      notes.length === 0 ? '还没有卡片' : '共 ' + notes.length + ' 张卡片' + (query ? '（匹配 ' + shown.length + ' 张）' : '');
   }
 
   function addNote() {
@@ -475,6 +479,288 @@
   $('note-search').addEventListener('input', renderNotes);
   $('note-input').addEventListener('keydown', function (e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') addNote();
+  });
+
+  /* ---------------- ③-2 AI 问答笔记（框架） ---------------- */
+
+  var qaNotes = load(KEYS.qa, []);
+  if (!Array.isArray(qaNotes)) qaNotes = [];
+
+  function saveQa() {
+    save(KEYS.qa, qaNotes);
+  }
+
+  function renderQa() {
+    var list = $('qa-list');
+    if (!list) return;
+    var query = ($('qa-search').value || '').trim().toLowerCase();
+    list.textContent = '';
+
+    var shown = qaNotes.filter(function (item) {
+      if (!query) return true;
+      return (
+        (item.q || '').toLowerCase().indexOf(query) >= 0 ||
+        (item.a || '').toLowerCase().indexOf(query) >= 0 ||
+        (item.tag || '').toLowerCase().indexOf(query) >= 0
+      );
+    });
+
+    shown.forEach(function (item) {
+      var li = document.createElement('li');
+      li.className = 'note';
+
+      var head = document.createElement('div');
+      head.className = 'note-head';
+      var time = document.createElement('span');
+      time.textContent = fmtTime(item.at);
+      head.appendChild(time);
+      if (item.tag) {
+        var tag = document.createElement('span');
+        tag.className = 'note-tag';
+        tag.textContent = item.tag;
+        head.appendChild(tag);
+      }
+
+      var q = document.createElement('div');
+      q.className = 'qa-q';
+      q.textContent = '问：' + item.q;
+
+      var a = document.createElement('div');
+      a.className = 'note-body qa-a';
+      a.textContent = '答：' + item.a;
+
+      var foot = document.createElement('div');
+      foot.className = 'note-foot';
+      foot.appendChild(
+        miniBtn('删除', '删除这条问答', function () {
+          if (!confirm('删除这条问答笔记？')) return;
+          qaNotes = qaNotes.filter(function (n) {
+            return n.id !== item.id;
+          });
+          saveQa();
+          renderQa();
+          renderFooter();
+        }, true)
+      );
+
+      li.appendChild(head);
+      li.appendChild(q);
+      li.appendChild(a);
+      li.appendChild(foot);
+      list.appendChild(li);
+    });
+
+    $('qa-empty').hidden = shown.length > 0;
+    $('qa-empty').textContent = qaNotes.length === 0 ? '还没有问答笔记。' : '没有匹配的问答。';
+    $('qa-summary').textContent =
+      qaNotes.length === 0 ? '还没有问答笔记' : '共 ' + qaNotes.length + ' 条问答' + (query ? '（匹配 ' + shown.length + ' 条）' : '');
+  }
+
+  function addQa() {
+    var q = $('qa-q').value.trim();
+    var a = $('qa-a').value.trim();
+    if (!q && !a) {
+      $('qa-q').focus();
+      return;
+    }
+    qaNotes.unshift({
+      id: uid(),
+      q: q || '(未填问题)',
+      a: a || '(未填答案)',
+      tag: $('qa-tag').value.trim(),
+      at: Date.now()
+    });
+    $('qa-q').value = '';
+    $('qa-a').value = '';
+    $('qa-tag').value = '';
+    saveQa();
+    renderQa();
+    renderFooter();
+  }
+
+  var qaAddBtn = $('qa-add');
+  if (qaAddBtn) qaAddBtn.addEventListener('click', addQa);
+  var qaSearchBox = $('qa-search');
+  if (qaSearchBox) qaSearchBox.addEventListener('input', renderQa);
+  var qaAnswerBox = $('qa-a');
+  if (qaAnswerBox) {
+    qaAnswerBox.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') addQa();
+    });
+  }
+
+  /* ---------------- ③-3 手写笔记（画板框架） ---------------- */
+
+  var pad = { strokes: load(KEYS.pad, []), tool: 'pen' };
+  if (!Array.isArray(pad.strokes)) pad.strokes = [];
+
+  var padCanvas = $('pad-canvas');
+  var padCtx = padCanvas && padCanvas.getContext ? padCanvas.getContext('2d') : null;
+  var padCurrent = null;
+  var padSaveTimer = null;
+
+  function setPadStatus(text) {
+    var el = $('pad-status');
+    if (!el) return;
+    el.textContent = text || '';
+    if (text) {
+      window.setTimeout(function () {
+        if (el.textContent === text) el.textContent = '';
+      }, 2500);
+    }
+  }
+
+  function padStyle() {
+    var base = Number(($('pad-size') || {}).value) || 3;
+    return pad.tool === 'eraser'
+      ? { color: '#ffffff', size: Math.max(14, base * 4) }
+      : { color: '#1a1d21', size: base };
+  }
+
+  function padPoint(event) {
+    var rect = padCanvas.getBoundingClientRect();
+    var sx = padCanvas.width / (rect.width || padCanvas.width);
+    var sy = padCanvas.height / (rect.height || padCanvas.height);
+    return { x: (event.clientX - rect.left) * sx, y: (event.clientY - rect.top) * sy };
+  }
+
+  function padLine(stroke, from, to) {
+    if (!padCtx) return;
+    padCtx.strokeStyle = stroke.color;
+    padCtx.lineWidth = stroke.size;
+    padCtx.lineCap = 'round';
+    padCtx.lineJoin = 'round';
+    padCtx.beginPath();
+    padCtx.moveTo(from.x, from.y);
+    padCtx.lineTo(to.x, to.y);
+    padCtx.stroke();
+  }
+
+  function padDot(stroke, at) {
+    if (!padCtx) return;
+    padCtx.fillStyle = stroke.color;
+    padCtx.beginPath();
+    padCtx.arc(at.x, at.y, Math.max(1, stroke.size / 2), 0, Math.PI * 2);
+    padCtx.fill();
+  }
+
+  function padRedraw() {
+    if (!padCtx) return;
+    padCtx.fillStyle = '#ffffff';
+    padCtx.fillRect(0, 0, padCanvas.width, padCanvas.height);
+    pad.strokes.forEach(function (stroke) {
+      if (stroke.points.length === 1) {
+        padDot(stroke, stroke.points[0]);
+        return;
+      }
+      for (var i = 1; i < stroke.points.length; i += 1) {
+        padLine(stroke, stroke.points[i - 1], stroke.points[i]);
+      }
+    });
+  }
+
+  function padPersist() {
+    if (padSaveTimer) window.clearTimeout(padSaveTimer);
+    padSaveTimer = window.setTimeout(function () {
+      save(KEYS.pad, pad.strokes);
+    }, 400);
+  }
+
+  if (padCanvas && padCtx) {
+    padRedraw();
+
+    padCanvas.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      if (padCanvas.setPointerCapture) {
+        try {
+          padCanvas.setPointerCapture(e.pointerId);
+        } catch (err) {
+          /* 忽略 */
+        }
+      }
+      var style = padStyle();
+      padCurrent = { color: style.color, size: style.size, points: [padPoint(e)] };
+      pad.strokes.push(padCurrent);
+      padDot(padCurrent, padCurrent.points[0]);
+    });
+
+    padCanvas.addEventListener('pointermove', function (e) {
+      if (!padCurrent) return;
+      e.preventDefault();
+      var last = padCurrent.points[padCurrent.points.length - 1];
+      var next = padPoint(e);
+      if (Math.abs(next.x - last.x) + Math.abs(next.y - last.y) < 1.5) return;
+      padCurrent.points.push(next);
+      padLine(padCurrent, last, next);
+    });
+
+    function endPadStroke() {
+      if (!padCurrent) return;
+      padCurrent = null;
+      padPersist();
+      setPadStatus('已自动保存');
+    }
+    padCanvas.addEventListener('pointerup', endPadStroke);
+    padCanvas.addEventListener('pointercancel', endPadStroke);
+    padCanvas.addEventListener('pointerleave', endPadStroke);
+  }
+
+  function padBtn(id, handler) {
+    var el = $(id);
+    if (el) el.addEventListener('click', handler);
+  }
+
+  padBtn('pad-pen', function () {
+    pad.tool = 'pen';
+    $('pad-pen').classList.add('primary');
+    $('pad-eraser').classList.remove('primary');
+    setPadStatus('画笔');
+  });
+
+  padBtn('pad-eraser', function () {
+    pad.tool = 'eraser';
+    $('pad-eraser').classList.add('primary');
+    $('pad-pen').classList.remove('primary');
+    setPadStatus('橡皮');
+  });
+
+  padBtn('pad-undo', function () {
+    if (!pad.strokes.length) {
+      setPadStatus('没有可撤销的笔画');
+      return;
+    }
+    pad.strokes.pop();
+    padRedraw();
+    padPersist();
+    setPadStatus('已撤销');
+  });
+
+  padBtn('pad-clear', function () {
+    if (!pad.strokes.length) return;
+    if (!confirm('清空整页手写内容？')) return;
+    pad.strokes = [];
+    padRedraw();
+    padPersist();
+    setPadStatus('已清空');
+  });
+
+  padBtn('pad-save', function () {
+    if (!padCanvas) return;
+    if (!pad.strokes.length) {
+      setPadStatus('还是空白页，先写点什么');
+      return;
+    }
+    var d = new Date();
+    function p(n) {
+      return n < 10 ? '0' + n : String(n);
+    }
+    var a = document.createElement('a');
+    a.href = padCanvas.toDataURL('image/png');
+    a.download = '手写笔记-' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + '.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setPadStatus('已保存为图片');
   });
 
   /* ---------------- ② 向 AI 提问：设置 ---------------- */
@@ -1196,8 +1482,10 @@
       roadmap.length +
       ' 个阶段 · 对话 ' +
       chat.length +
-      ' 条 · 笔记 ' +
+      ' 条 · 卡片 ' +
       notes.length +
+      ' 张 · 问答 ' +
+      qaNotes.length +
       ' 条';
   }
 
@@ -1268,6 +1556,7 @@
   renderRoadmap();
   renderChat();
   renderNotes();
+  renderQa();
   renderFooter();
   setAttachStatus('');
   window.__aiStudyReady = true;
