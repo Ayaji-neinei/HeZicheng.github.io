@@ -542,6 +542,54 @@ summary:focus-visible {
   overflow-x: auto;
 }
 
+/* 代码块外面套一层，让复制按钮固定不随横向滚动跑掉 */
+.code-wrap {
+  position: relative;
+  margin: 10px 0;
+}
+
+.code-wrap pre {
+  margin: 0;
+  padding-right: 64px;
+}
+
+.code-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.6;
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.75;
+  transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.code-copy:hover,
+.code-copy:focus-visible {
+  opacity: 1;
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.code-copy.done {
+  color: var(--ok);
+  border-color: var(--ok);
+  opacity: 1;
+}
+
+.code-copy.fail {
+  color: var(--warn);
+  border-color: var(--warn);
+  opacity: 1;
+}
+
 .rich pre code {
   padding: 0;
   border: none;

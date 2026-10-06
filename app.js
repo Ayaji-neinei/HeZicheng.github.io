@@ -171,6 +171,40 @@
       });
   }
 
+  /* ---------------- 复制到剪贴板 ---------------- */
+
+  /** 老浏览器或 file:// 下的兜底复制方式。 */
+  function legacyCopy(text) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.top = '-1000px';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      var ok = !!(document.execCommand && document.execCommand('copy'));
+      document.body.removeChild(ta);
+      return ok;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function copyText(text, onDone, onFail) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(onDone, function () {
+        if (legacyCopy(text)) onDone();
+        else onFail();
+      });
+      return;
+    }
+    if (legacyCopy(text)) onDone();
+    else onFail();
+  }
+
   function miniBtn(label, title, onClick, danger) {
     var btn = document.createElement('button');
     btn.type = 'button';
@@ -184,7 +218,7 @@
 
   /* ---------------- 自检与错误提示 ---------------- */
 
-  var APP_VERSION = 'v7';
+  var APP_VERSION = 'v8';
 
   function showAlert(text) {
     var el = $('app-alert');
@@ -806,6 +840,48 @@
         /* 公式渲染失败不影响正文 */
       }
     }
+
+    // 代码块一键复制
+    Array.prototype.slice.call(el.querySelectorAll('pre')).forEach(function (pre) {
+      var code = pre.querySelector('code');
+      if (!code || pre.parentNode === null) return;
+      if (pre.getAttribute('data-copy-ready') === '1') return;
+      pre.setAttribute('data-copy-ready', '1');
+
+      var wrap = document.createElement('div');
+      wrap.className = 'code-wrap';
+      pre.parentNode.insertBefore(wrap, pre);
+      wrap.appendChild(pre);
+
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'code-copy';
+      btn.textContent = '复制';
+      btn.title = '复制这段代码';
+      btn.setAttribute('aria-label', '复制这段代码');
+      btn.addEventListener('click', function () {
+        var text = code.textContent || '';
+        var restore = function (label) {
+          btn.textContent = label;
+          window.setTimeout(function () {
+            btn.textContent = '复制';
+            btn.classList.remove('done', 'fail');
+          }, 1600);
+        };
+        copyText(
+          text,
+          function () {
+            btn.classList.add('done');
+            restore('已复制');
+          },
+          function () {
+            btn.classList.add('fail');
+            restore('复制失败');
+          }
+        );
+      });
+      wrap.appendChild(btn);
+    });
   }
 
   function renderChat() {
@@ -1089,19 +1165,18 @@
       $('chat-status').textContent = '没有可复制的内容';
       return;
     }
-    var done = function () {
-      $('chat-status').textContent = '已复制，可以贴到别处提问';
-      setTimeout(function () {
-        $('chat-status').textContent = '';
-      }, 2500);
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done, function () {
+    copyText(
+      text,
+      function () {
+        $('chat-status').textContent = '已复制，可以贴到别处提问';
+        setTimeout(function () {
+          $('chat-status').textContent = '';
+        }, 2500);
+      },
+      function () {
         window.prompt('复制下面这段文字：', text);
-      });
-    } else {
-      window.prompt('复制下面这段文字：', text);
-    }
+      }
+    );
   });
 
   $('chat-clear').addEventListener('click', function () {
