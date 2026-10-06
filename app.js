@@ -54,6 +54,10 @@
     '回答要求：先给一句话结论，再分点讲清楚；能用小例子或类比就用；' +
     '最后给出可执行的下一步（学什么、练什么、大概花多久）。' +
     '如果学生附上了图片或文件，先说明你从中看到的关键信息，再回答。' +
+    '输出格式：用 Markdown（小标题、列表、加粗、代码块、表格）；' +
+    '数学公式一律用 LaTeX 写，行内公式用 $...$，独立成行的公式用 $$...$$，' +
+    '不要用 Unicode 拼凑公式，也不要用图片代替公式；' +
+    '普通符号（α、β、∑、≤、→ 等）可以直接写。' +
     '避免空话和鸡汤，也避免超出问题范围的扩展。';
 
   function $(id) {
@@ -180,7 +184,7 @@
 
   /* ---------------- 自检与错误提示 ---------------- */
 
-  var APP_VERSION = 'v6';
+  var APP_VERSION = 'v7';
 
   function showAlert(text) {
     var el = $('app-alert');
@@ -738,6 +742,72 @@
     return chips;
   }
 
+  /**
+   * 把 AI 的回答渲染成富文本：Markdown → 净化 → 数学公式。
+   * 任何一步缺少依赖或出错都会退回到纯文本，不会让消息显示不出来。
+   */
+  function renderRichInto(el, text) {
+    var marked = window.marked;
+    var purify = window.DOMPurify;
+
+    if (!marked || typeof marked.parse !== 'function') {
+      el.textContent = text;
+      return;
+    }
+
+    var html;
+    try {
+      html = marked.parse(text, { gfm: true, breaks: true });
+    } catch (err) {
+      el.textContent = text;
+      return;
+    }
+
+    // 模型输出属于外部内容：一定要净化，避免脚本注入（本地存着 API Key）
+    if (purify) {
+      html = purify.sanitize(html, {
+        FORBID_TAGS: [
+          'style', 'script', 'iframe', 'object', 'embed', 'form', 'input', 'button',
+          'link', 'meta', 'base', 'img', 'video', 'audio', 'source', 'track'
+        ],
+        FORBID_ATTR: ['style', 'srcset', 'formaction'],
+        ALLOW_DATA_ATTR: false
+      });
+    }
+
+    el.innerHTML = html;
+
+    // 只允许安全协议的链接，并且统一新窗口打开
+    Array.prototype.slice.call(el.querySelectorAll('a')).forEach(function (a) {
+      var href = a.getAttribute('href') || '';
+      if (!/^(https?:\/\/|mailto:|#)/i.test(href)) {
+        a.removeAttribute('href');
+        return;
+      }
+      a.setAttribute('target', '_blank');
+      a.setAttribute('rel', 'noopener noreferrer');
+    });
+
+    // 数学公式：$...$、$$...$$、\(...\)、\[...\]
+    if (window.katex && typeof window.renderMathInElement === 'function') {
+      try {
+        window.renderMathInElement(el, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code', 'option'],
+          throwOnError: false,
+          errorColor: '#b7791f'
+        });
+      } catch (err) {
+        /* 公式渲染失败不影响正文 */
+      }
+    }
+  }
+
   function renderChat() {
     var log = $('chat-log');
     log.textContent = '';
@@ -752,7 +822,14 @@
       box.appendChild(role);
 
       var body = document.createElement('div');
-      body.textContent = msg.content;
+      body.className = 'msg-body';
+      if (msg.role === 'assistant') {
+        box.classList.add('rich-msg');
+        body.classList.add('rich');
+        renderRichInto(body, msg.content);
+      } else {
+        body.textContent = msg.content;
+      }
       box.appendChild(body);
 
       var chips = attachmentChips(msg);

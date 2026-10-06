@@ -469,6 +469,142 @@ summary:focus-visible {
   font-size: 12px;
 }
 
+/* ---------- AI 回答的富文本（Markdown + 数学公式） ---------- */
+
+.msg.rich-msg {
+  white-space: normal;
+}
+
+.rich > *:first-child {
+  margin-top: 0;
+}
+
+.rich > *:last-child {
+  margin-bottom: 0;
+}
+
+.rich h1,
+.rich h2,
+.rich h3,
+.rich h4 {
+  margin: 16px 0 6px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.rich h1 {
+  font-size: 18px;
+}
+
+.rich h2 {
+  font-size: 16px;
+}
+
+.rich h3,
+.rich h4 {
+  font-size: 15px;
+}
+
+.rich p {
+  margin: 8px 0;
+}
+
+.rich ul,
+.rich ol {
+  margin: 8px 0;
+  padding-left: 22px;
+}
+
+.rich li {
+  margin: 3px 0;
+}
+
+.rich li > ul,
+.rich li > ol {
+  margin: 3px 0;
+}
+
+.rich code {
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace;
+  font-size: 13px;
+}
+
+.rich pre {
+  margin: 10px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f6f8fa;
+  overflow-x: auto;
+}
+
+.rich pre code {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre;
+}
+
+.rich blockquote {
+  margin: 10px 0;
+  padding: 2px 0 2px 12px;
+  border-left: 3px solid var(--border);
+  color: var(--text-muted);
+}
+
+.rich table {
+  display: block;
+  max-width: 100%;
+  margin: 10px 0;
+  border-collapse: collapse;
+  overflow-x: auto;
+  font-size: 14px;
+}
+
+.rich th,
+.rich td {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+
+.rich th {
+  background: var(--surface);
+  font-weight: 600;
+}
+
+.rich hr {
+  margin: 14px 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+.rich img {
+  max-width: 100%;
+}
+
+.rich a {
+  word-break: break-word;
+}
+
+/* 公式：行内跟随文字大小，独立公式太宽时可横向滚动 */
+.rich .katex {
+  font-size: 1.05em;
+}
+
+.rich .katex-display {
+  margin: 12px 0;
+  padding: 2px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 .quick {
   display: flex;
   gap: 8px;
