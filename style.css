@@ -970,6 +970,68 @@ summary:focus-visible {
   }
 }
 
+/* ---------- 免费渠道选择 ---------- */
+
+.free-note {
+  margin: 10px 0 0;
+  line-height: 1.7;
+}
+
+.providers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.provider {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.provider strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.provider span {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.provider:hover {
+  border-color: var(--accent);
+}
+
+.provider.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.provider.is-active strong {
+  color: var(--accent);
+}
+
+.provider-hint {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface);
+  line-height: 1.7;
+}
+
 /* ---------- 页脚 ---------- */
 
 .site-footer {

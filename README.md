@@ -30,16 +30,34 @@
 
 底部还有 **导出备份 / 导入备份**（JSON 文件），用于换电脑或清缓存前保存数据。
 
-## 使用第 ② 板块（需要一次设置）
+## 使用第 ② 板块（免费方案）
 
 纯静态网页没有后端，所以浏览器会**直接用你自己的 API Key** 调用模型接口。
 
-1. 打开 <https://platform.deepseek.com/api_keys>，注册并创建一个 API Key（形如 `sk-...`）。
-2. 在网页里展开「AI 设置」，把 Key 粘进去，点「保存到本机」。
-3. 之后就能直接在输入框提问了。
+⚠️ **事实说明**：DeepSeek 官方**没有**「无需凭据的免费 API」。免费用只有两条合规途径：
+① 官方新账号赠送额度；② 硅基流动 / 魔搭 / OpenRouter 等平台的免费额度或免费模型。两者都需要**免费注册一个 Key**。
+本项目不会接入来路不明的"免费代理"——那等于把所有提问交给第三方。
+
+### 免费渠道（设置里一键切换）
+
+| 渠道 | 免费方式 | 接口地址 | 默认模型 | 支持图片 |
+| --- | --- | --- | --- | --- |
+| DeepSeek 官方 | 新账号送额度、无需信用卡（之后按量计费，很便宜） | `https://api.deepseek.com` | `deepseek-flash` | ✅ |
+| 硅基流动 SiliconFlow | 注册送额度，另有部分模型长期免费 | `https://api.siliconflow.cn/v1` | `deepseek-ai/DeepSeek-V3` | ❌ |
+| 魔搭 ModelScope | 每天免费调用额度（国内访问快） | `https://api-inference.modelscope.cn/v1` | `deepseek-ai/DeepSeek-V3` | ❌ |
+| OpenRouter | `:free` 后缀模型免费（有频率限制） | `https://openrouter.ai/api/v1` | `deepseek/deepseek-chat-v3-0324:free` | ❌ |
+
+四家的接口都实测允许浏览器直接跨域调用（CORS 通过）。模型名会随平台更新，失效时到对应平台的模型列表复制当前名称即可（设置里的地址与模型都能手改）。
+
+### 完全不需要 Key 的用法
+
+点「**没有 Key？去 DeepSeek 官网免费问**」：页面会把你当前的学习阶段 + 你的问题整理成一段提示词
+**复制到剪贴板并打开 chat.deepseek.com**，粘贴即可免费提问（用的是 DeepSeek 官网的免费网页版）。
+
+### 手动配置（任意 OpenAI 兼容接口）
 
 默认接口 `https://api.deepseek.com`、模型 `deepseek-flash`，都可以在设置里改
-（任何 OpenAI 兼容接口都可以，例如换成 Kimi 的 `https://api.moonshot.cn/v1`）。
+（例如换成 Kimi 的 `https://api.moonshot.cn/v1`；注意：`thinking` 参数只在地址含 `deepseek` 时发送）。
 
 ### 上传图片和文件
 

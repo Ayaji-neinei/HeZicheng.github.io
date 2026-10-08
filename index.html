@@ -6,7 +6,7 @@
     <title>AI 学习管理</title>
     <meta name="description" content="管理人工智能专业的学习：学习路线、向 AI 提问、学习笔记" />
     <link rel="stylesheet" href="vendor/katex/katex.min.css?v=7" />
-    <link rel="stylesheet" href="style.css?v=10" />
+    <link rel="stylesheet" href="style.css?v=11" />
     <link rel="icon" href="data:," />
   </head>
   <body>
@@ -69,23 +69,25 @@
         </div>
 
         <div class="notice" id="chat-notice">
-          还没填 API Key，所以暂时不会真的回答。填一次 Key 就能用了（只保存在你本机浏览器里，
-          不会上传到 GitHub）。也可以先用「复制问题」把问题贴到你平时用的 AI 里。
+          还没填 API Key，所以页面暂时不会直接回答。三种免费用法：
+          <strong>①</strong> 在下面「AI 设置」里点一个免费渠道（DeepSeek 官方新账号送额度 / 硅基流动 / 魔搭 / OpenRouter），
+          免费注册后把 Key 粘进来；
+          <strong>②</strong> 点「没有 Key？去 DeepSeek 官网免费问」——问题会自动复制好并打开官网，粘贴即可；
+          <strong>③</strong> 用「复制问题」贴到你平时用的 AI 里。
         </div>
 
         <details class="card" id="settings-card">
-          <summary>AI 设置（第一次使用需要填一次）</summary>
-          <ol class="steps">
-            <li>
-              打开
-              <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer"
-                >platform.deepseek.com/api_keys</a
-              >
-              注册并创建一个 API Key（形如 <code>sk-...</code>）。
-            </li>
-            <li>把 Key 粘贴到下面，点「保存到本机」。</li>
-            <li>回到下面的输入框提问即可。费用按用量计，学习用途通常很少。</li>
-          </ol>
+          <summary>AI 设置（免费方案在这里一键切换）</summary>
+
+          <p class="hint free-note">
+            免费怎么来：DeepSeek 官方<strong>新账号会赠送额度</strong>（无需信用卡）；
+            硅基流动 / 魔搭 / OpenRouter 也提供<strong>免费额度或免费模型</strong>。
+            点下面任一方案会自动填好接口地址和模型，你只需去对应网站免费注册、拿到 Key 粘进来。
+          </p>
+
+          <div class="providers" id="providers"></div>
+
+          <p class="hint provider-hint" id="provider-hint"></p>
 
           <label class="field">
             <span>API Key</span>
@@ -102,18 +104,9 @@
             <input id="api-model" type="text" placeholder="deepseek-flash" />
           </label>
 
-          <div class="presets">
-            <button class="chip" type="button" data-model="deepseek-flash">
-              deepseek-flash · 便宜、支持图片
-            </button>
-            <button class="chip" type="button" data-model="deepseek-v4-pro">
-              deepseek-v4-pro · 更强、不支持图片
-            </button>
-          </div>
-
           <label class="check">
             <input id="api-thinking" type="checkbox" />
-            <span>深度思考：难题时打开（更慢更贵，但推理更准）</span>
+            <span>深度思考：难题时打开（更慢更贵，但推理更准；仅 DeepSeek 官方接口支持）</span>
           </label>
 
           <div class="row">
@@ -160,6 +153,7 @@
 
         <div class="row">
           <button class="btn primary" type="button" id="chat-send">发送</button>
+          <button class="btn" type="button" id="chat-free">没有 Key？去 DeepSeek 官网免费问</button>
           <button class="btn" type="button" id="chat-copy">复制问题</button>
           <button class="btn" type="button" id="chat-clear">清空对话</button>
           <span class="status" id="chat-status"></span>
@@ -289,7 +283,7 @@
         <input id="data-file" type="file" accept="application/json,.json" hidden />
       </div>
       <p class="sub" id="footer-status"></p>
-      <p class="sub" id="footer-version">页面版本 v10</p>
+      <p class="sub" id="footer-version">页面版本 v11</p>
     </footer>
 
     <!-- 所有界面通用：回到顶部 -->
@@ -300,7 +294,7 @@
     <script src="vendor/purify.min.js?v=7"></script>
     <script src="vendor/katex/katex.min.js?v=7"></script>
     <script src="vendor/katex/auto-render.min.js?v=7"></script>
-    <script src="app.js?v=10"></script>
+    <script src="app.js?v=11"></script>
     <script>
       // 如果 app.js 没被加载或执行（最常见的原因：浏览器缓存了旧文件），
       // 这段内联脚本不依赖任何外部文件，仍然能给出提示。

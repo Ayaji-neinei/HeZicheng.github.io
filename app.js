@@ -220,7 +220,54 @@
 
   /* ---------------- 自检与错误提示 ---------------- */
 
-  var APP_VERSION = 'v10';
+  var APP_VERSION = 'v11';
+
+  /**
+   * 可用的 DeepSeek 渠道。注意：DeepSeek 官方没有「无需凭据的免费 API」，
+   * 下面这些都是「免费注册 + 免费额度 / 免费模型」，是当前合规的免费途径。
+   */
+  var PROVIDERS = [
+    {
+      id: 'deepseek',
+      name: 'DeepSeek 官方',
+      tag: '新账号送额度 · 无需信用卡',
+      base: 'https://api.deepseek.com',
+      model: 'deepseek-flash',
+      keyUrl: 'https://platform.deepseek.com/api_keys',
+      hint:
+        '用法：注册（手机号即可）后创建 API Key 粘到下面。deepseek-flash 价格低、支持图片，新账号赠送的额度对日常学习提问够用很久。官方是按量计费的，额度用完需充值。'
+    },
+    {
+      id: 'siliconflow',
+      name: '硅基流动',
+      tag: '注册送额度 · 有免费模型',
+      base: 'https://api.siliconflow.cn/v1',
+      model: 'deepseek-ai/DeepSeek-V3',
+      keyUrl: 'https://cloud.siliconflow.cn/account/ak',
+      hint:
+        '用法：注册后在「API 密钥」新建 Key。该平台托管 DeepSeek 等开源模型，注册赠送额度，另有部分模型长期免费。若模型名失效，去它的模型广场复制当前名称。不支持图片。'
+    },
+    {
+      id: 'modelscope',
+      name: '魔搭 ModelScope',
+      tag: '每日免费调用额度',
+      base: 'https://api-inference.modelscope.cn/v1',
+      model: 'deepseek-ai/DeepSeek-V3',
+      keyUrl: 'https://modelscope.cn/my/myaccesstoken',
+      hint:
+        '用法：用阿里云账号登录，在「访问令牌」创建 SDK 令牌（形如 ms-...）粘进来。每天有免费调用额度，国内访问快，适合学习使用。不支持图片。'
+    },
+    {
+      id: 'openrouter',
+      name: 'OpenRouter',
+      tag: '有 :free 免费变体',
+      base: 'https://openrouter.ai/api/v1',
+      model: 'deepseek/deepseek-chat-v3-0324:free',
+      keyUrl: 'https://openrouter.ai/keys',
+      hint:
+        '用法：注册后创建 Key（形如 sk-or-...）。带 :free 后缀的模型免费、但有频率限制；模型名会更新，可在它的 Models 页搜索 deepseek，挑当前带 :free 的那个。不支持图片。'
+    }
+  ];
 
   function showAlert(text) {
     var el = $('app-alert');
@@ -787,6 +834,7 @@
   if (!settings.model || OLD_MODELS.indexOf(settings.model) >= 0) settings.model = DEFAULT_MODEL; // 旧默认值迁移
   if (typeof settings.thinking !== 'boolean') settings.thinking = false;
   if (typeof settings.key !== 'string') settings.key = '';
+  if (typeof settings.provider !== 'string') settings.provider = 'deepseek';
 
   /** 仅存在于本次会话内存里的图片数据：消息 id -> [dataURL]。刷新后旧的图片不再随对话发送。 */
   var sessionImages = {};
@@ -806,7 +854,14 @@
 
   function modelLooksVisionless() {
     var m = (settings.model || '').toLowerCase();
-    return m.indexOf('v4-pro') >= 0 || m.indexOf('deepseek-chat') >= 0 || m.indexOf('reasoner') >= 0;
+    return (
+      m.indexOf('v4-pro') >= 0 ||
+      m.indexOf('deepseek-chat') >= 0 ||
+      m.indexOf('reasoner') >= 0 ||
+      m.indexOf('deepseek-r1') >= 0 ||
+      m.indexOf('deepseek-v3') >= 0 ||
+      m.indexOf('v3-0324') >= 0
+    );
   }
 
   function refreshApiState() {
@@ -843,11 +898,107 @@
     $('chat-status').textContent = '已清除本机保存的 Key';
   });
 
-  Array.prototype.slice.call(document.querySelectorAll('.presets .chip')).forEach(function (chip) {
-    chip.addEventListener('click', function () {
-      $('api-model').value = chip.dataset.model;
+  /* ---------------- 免费渠道：一键填好地址与模型 ---------------- */
+
+  function markActiveProvider(id) {
+    Array.prototype.slice.call(document.querySelectorAll('.provider')).forEach(function (el) {
+      el.classList.toggle('is-active', el.dataset.provider === id);
     });
-  });
+  }
+
+  function showProviderHint(provider) {
+    var el = $('provider-hint');
+    if (!el) return;
+    el.textContent = '';
+    if (!provider) return;
+    el.appendChild(document.createTextNode(provider.hint + ' '));
+    var link = document.createElement('a');
+    link.href = provider.keyUrl;
+    link.target = '_blank';
+    link.rel = 'noreferrer';
+    link.textContent = '免费注册并创建 Key →';
+    el.appendChild(link);
+  }
+
+  function providerById(id) {
+    for (var i = 0; i < PROVIDERS.length; i += 1) {
+      if (PROVIDERS[i].id === id) return PROVIDERS[i];
+    }
+    return PROVIDERS[0];
+  }
+
+  function renderProviders() {
+    var box = $('providers');
+    if (!box) return;
+    box.textContent = '';
+    PROVIDERS.forEach(function (p) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'provider';
+      btn.dataset.provider = p.id;
+      var name = document.createElement('strong');
+      name.textContent = p.name;
+      var tag = document.createElement('span');
+      tag.textContent = p.tag;
+      btn.appendChild(name);
+      btn.appendChild(tag);
+      btn.addEventListener('click', function () {
+        $('api-base').value = p.base;
+        $('api-model').value = p.model;
+        settings.provider = p.id;
+        markActiveProvider(p.id);
+        showProviderHint(p);
+        $('chat-status').textContent = '已填入「' + p.name + '」的地址和模型，填好 Key 再点「保存到本机」';
+        window.setTimeout(function () {
+          if (($('chat-status').textContent || '').indexOf('已填入') === 0) $('chat-status').textContent = '';
+        }, 5000);
+      });
+      box.appendChild(btn);
+    });
+    markActiveProvider(settings.provider);
+    showProviderHint(providerById(settings.provider));
+  }
+
+  renderProviders();
+
+  /* ---------------- 没有 Key 也能用：交给 DeepSeek 官网 ---------------- */
+
+  function buildFreePrompt() {
+    var doing = roadmap.filter(function (s) {
+      return s.status === 'doing';
+    });
+    var lines = [
+      '我在学人工智能专业，目前正在学的阶段是：' + (doing.length ? doing[0].title : '（还没标记）') + '。',
+      '请你作为我的 AI 学习助教回答下面这个问题：用 Markdown 输出，数学公式用 LaTeX（行内 $...$、独立 $$...$$），先给结论再分点，最后给可执行的下一步。',
+      ''
+    ];
+    if (pending.length) {
+      lines.push('（我另外准备了 ' + pending.length + ' 个附件：' + pending.map(function (a) { return a.name; }).join('、') + '，稍后会在对话框里上传）');
+    }
+    var text = ($('chat-input').value || '').trim();
+    lines.push(text || '请根据我当前的学习阶段，告诉我下一步该学什么、怎么练。');
+    return lines.join('\n');
+  }
+
+  var freeBtn = $('chat-free');
+  if (freeBtn) {
+    freeBtn.addEventListener('click', function () {
+      var prompt = buildFreePrompt();
+      copyText(
+        prompt,
+        function () {
+          $('chat-status').textContent = '问题已复制到剪贴板，在打开的 DeepSeek 官网直接粘贴即可免费提问';
+        },
+        function () {
+          $('chat-status').textContent = '问题已生成，请手动复制';
+          window.prompt('复制下面这段，粘贴到 DeepSeek 官网提问：', prompt);
+        }
+      );
+      window.setTimeout(function () {
+        window.open('https://chat.deepseek.com/', '_blank', 'noopener');
+      }, 150);
+    });
+  }
 
   /* ---------------- ② 向 AI 提问：附件 ---------------- */
 
@@ -1412,7 +1563,8 @@
     renderChat();
 
     if (!settings.key) {
-      $('chat-status').textContent = '未填写 API Key —— 展开上面「AI 设置」填一次，或点「复制问题」';
+      $('chat-status').textContent =
+        '还没填 API Key：可以点「没有 Key？去 DeepSeek 官网免费问」，或到上面「AI 设置」里选一个免费渠道填入 Key';
       return;
     }
 
