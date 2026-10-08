@@ -12,7 +12,8 @@
     notes: 'aiStudy.notes.v1',
     qa: 'aiStudy.qaNotes.v1',
     pad: 'aiStudy.handwriting.v1',
-    settings: 'aiStudy.settings.v1'
+    settings: 'aiStudy.settings.v1',
+    sessions: 'aiStudy.sessions.v1'
   };
 
   var STATUS_TEXT = { todo: '未开始', doing: '学习中', done: '已完成' };
@@ -288,7 +289,8 @@
     var required = [
       'screen-home', 'screen-roadmap', 'screen-chat', 'screen-notes',
       'screen-notes-cards', 'screen-notes-handwriting', 'screen-notes-qa',
-      'roadmap-list', 'note-list', 'qa-list', 'pad-canvas',
+      'roadmap-list', 'note-list', 'qa-list-chat', 'qa-list-single', 'pad-canvas',
+      'chat-sidebar', 'session-list', 'chat-new', 'providers',
       'attach-zone', 'attach-btn', 'attach-input',
       'chat-send', 'chat-log', 'chat-input'
     ];
@@ -305,11 +307,20 @@
 
   /* ---------------- 界面切换：主界面 ↔ 子界面 ---------------- */
 
+  /** 由 openSession 打开历史时置位，避免进入板块的默认重置把刚打开的那条清掉 */
+  var keepSessionOnShow = false;
+
   function showScreen(name) {
     SCREENS.forEach(function (key) {
       var el = $('screen-' + key);
       if (el) el.classList.toggle('is-active', key === name);
     });
+    // 需求：每次进入「向 AI 提问」都不自动显示历史，要自己点侧栏标题
+    if (name === 'chat' && !keepSessionOnShow) {
+      activeSessionId = null;
+      renderChat();
+    }
+    keepSessionOnShow = false;
     window.scrollTo(0, 0);
   }
 
@@ -528,91 +539,250 @@
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') addNote();
   });
 
-  /* ---------------- ③-2 AI 问答笔记（框架） ---------------- */
+  /* ---------------- 问答记录：会话（连续对话 / 单次问答） ---------------- */
 
-  var qaNotes = load(KEYS.qa, []);
-  if (!Array.isArray(qaNotes)) qaNotes = [];
+  var SESSION_MODES = { chat: '连续对话', single: '单次问答' };
+  var sessions = load(KEYS.sessions, null);
 
-  function saveQa() {
-    save(KEYS.qa, qaNotes);
+  if (!Array.isArray(sessions)) {
+    // 首次运行：把旧的一条流水对话和旧的问答笔记迁移成新结构，保证老数据不丢
+    sessions = [];
+    var legacyChat = load(KEYS.chat, []);
+    if (Array.isArray(legacyChat) && legacyChat.length) {
+      var legacyFirstQ = '';
+      for (var lci = 0; lci < legacyChat.length; lci += 1) {
+        if (legacyChat[lci] && legacyChat[lci].role === 'user') {
+          legacyFirstQ = legacyChat[lci].content || '';
+          break;
+        }
+      }
+      sessions.push({
+        id: uid(),
+        mode: 'chat',
+        title: '',
+        createdAt: legacyChat[0].at || Date.now(),
+        updatedAt: legacyChat[legacyChat.length - 1].at || Date.now(),
+        messages: legacyChat
+      });
+      sessions[0].title = titleFromText(legacyFirstQ) || '历史对话';
+    }
+    var legacyQa = load(KEYS.qa, []);
+    if (Array.isArray(legacyQa)) {
+      legacyQa.forEach(function (n) {
+        var at = n.at || Date.now();
+        sessions.push({
+          id: uid(),
+          mode: 'single',
+          title: titleFromText(n.q) || '问答记录',
+          createdAt: at,
+          updatedAt: at,
+          messages: [
+            { id: uid(), role: 'user', content: n.q || '', at: at },
+            { id: uid(), role: 'assistant', content: n.a || '', at: at }
+          ]
+        });
+      });
+    }
+    save(KEYS.sessions, sessions);
   }
 
-  function renderQa() {
-    var list = $('qa-list');
-    if (!list) return;
-    var query = ($('qa-search').value || '').trim().toLowerCase();
-    list.textContent = '';
+  /** 当前打开的会话；null 表示"还没开始/要看新提问"（打开板块时不自动显示历史） */
+  var activeSessionId = null;
+  var chatMode = 'chat';
 
-    var shown = qaNotes.filter(function (item) {
-      if (!query) return true;
-      return (
-        (item.q || '').toLowerCase().indexOf(query) >= 0 ||
-        (item.a || '').toLowerCase().indexOf(query) >= 0 ||
-        (item.tag || '').toLowerCase().indexOf(query) >= 0
-      );
+  function titleFromText(text) {
+    var t = String(text || '')
+      .replace(/\s+/g, ' ')
+      .replace(/^[#*\-\s]+/, '')
+      .trim();
+    if (!t) return '';
+    return t.length > 24 ? t.slice(0, 24) + '…' : t;
+  }
+
+  function saveSessions() {
+    save(KEYS.sessions, sessions);
+  }
+
+  function sessionById(id) {
+    for (var i = 0; i < sessions.length; i += 1) {
+      if (sessions[i].id === id) return sessions[i];
+    }
+    return null;
+  }
+
+  function activeSession() {
+    return activeSessionId ? sessionById(activeSessionId) : null;
+  }
+
+  function activeMessages() {
+    var s = activeSession();
+    return s && Array.isArray(s.messages) ? s.messages : [];
+  }
+
+  function groupByMode(mode) {
+    return sessions.filter(function (s) {
+      return (s.mode || 'chat') === mode;
     });
+  }
 
-    shown.forEach(function (item) {
-      var li = document.createElement('li');
-      li.className = 'note';
+  function startSession(mode, title) {
+    var s = {
+      id: uid(),
+      mode: mode || chatMode,
+      title: title || '新提问',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      messages: []
+    };
+    sessions.unshift(s);
+    activeSessionId = s.id;
+    saveSessions();
+    return s;
+  }
 
-      var head = document.createElement('div');
-      head.className = 'note-head';
-      var time = document.createElement('span');
-      time.textContent = fmtTime(item.at);
-      head.appendChild(time);
-      if (item.tag) {
-        var tag = document.createElement('span');
-        tag.className = 'note-tag';
-        tag.textContent = item.tag;
-        head.appendChild(tag);
-      }
+  function touchSession(s) {
+    if (!s) return;
+    s.updatedAt = Date.now();
+    // 让最近用过的排在最前
+    var idx = sessions.indexOf(s);
+    if (idx > 0) {
+      sessions.splice(idx, 1);
+      sessions.unshift(s);
+    }
+    saveSessions();
+  }
 
-      var q = document.createElement('div');
-      q.className = 'qa-q';
-      q.textContent = '问：' + item.q;
+  /* ---------------- ③-2 AI 问答笔记（按模式分两类，只显示标题） ---------------- */
 
-      var a = document.createElement('div');
-      a.className = 'note-body qa-a';
-      if (item.rich) {
-        // 从对话收藏来的答案保留原样（Markdown + 公式），按富文本渲染
+  /** 当前在 AI 问答笔记里展开的那条标题（只显示标题，点开才看全部内容） */
+  var qaOpenId = null;
+
+  function buildSessionDetail(s) {
+    var box = document.createElement('div');
+    box.className = 'qa-detail';
+
+    var head = document.createElement('div');
+    head.className = 'note-head';
+    head.textContent =
+      SESSION_MODES[s.mode] + ' · ' + fmtTime(s.updatedAt || s.createdAt) + ' · ' + (s.messages || []).length + ' 条消息';
+    box.appendChild(head);
+
+    (s.messages || []).forEach(function (m) {
+      if (m.role === 'user') {
+        var q = document.createElement('div');
+        q.className = 'qa-q';
+        q.textContent = '问：' + (m.content || '');
+        box.appendChild(q);
+      } else if (m.role === 'assistant') {
         var label = document.createElement('div');
         label.className = 'qa-label';
         label.textContent = '答：';
-        a.appendChild(label);
+        box.appendChild(label);
         var richBody = document.createElement('div');
         richBody.className = 'rich';
-        a.appendChild(richBody);
-        renderRichInto(richBody, item.a || '');
+        box.appendChild(richBody);
+        renderRichInto(richBody, m.content || '');
       } else {
-        a.textContent = '答：' + item.a;
+        var err = document.createElement('div');
+        err.className = 'qa-a';
+        err.textContent = '（出错）' + (m.content || '');
+        box.appendChild(err);
       }
-
-      var foot = document.createElement('div');
-      foot.className = 'note-foot';
-      foot.appendChild(
-        miniBtn('删除', '删除这条问答', function () {
-          if (!confirm('删除这条问答笔记？')) return;
-          qaNotes = qaNotes.filter(function (n) {
-            return n.id !== item.id;
-          });
-          saveQa();
-          renderQa();
-          renderFooter();
-        }, true)
-      );
-
-      li.appendChild(head);
-      li.appendChild(q);
-      li.appendChild(a);
-      li.appendChild(foot);
-      list.appendChild(li);
+      var chips = attachmentChips(m);
+      if (chips.length) {
+        var atts = document.createElement('div');
+        atts.className = 'qa-atts';
+        atts.textContent = '附件：' + chips.map(function (c) { return c.name; }).join('、');
+        box.appendChild(atts);
+      }
     });
 
-    $('qa-empty').hidden = shown.length > 0;
-    $('qa-empty').textContent = qaNotes.length === 0 ? '还没有问答笔记。' : '没有匹配的问答。';
-    $('qa-summary').textContent =
-      qaNotes.length === 0 ? '还没有问答笔记' : '共 ' + qaNotes.length + ' 条问答' + (query ? '（匹配 ' + shown.length + ' 条）' : '');
+    var foot = document.createElement('div');
+    foot.className = 'note-foot';
+    foot.appendChild(
+      miniBtn('去这里继续对话', '在「向 AI 提问」里打开这条记录', function () {
+        openSession(s.id);
+      })
+    );
+    foot.appendChild(
+      miniBtn('删除', '删除这条记录', function () {
+        if (!confirm('删除这条记录？')) return;
+        sessions = sessions.filter(function (x) {
+          return x.id !== s.id;
+        });
+        if (activeSessionId === s.id) activeSessionId = null;
+        if (qaOpenId === s.id) qaOpenId = null;
+        saveSessions();
+        renderQa();
+        renderSidebar();
+        renderChat();
+        renderFooter();
+      }, true)
+    );
+    box.appendChild(foot);
+    return box;
+  }
+
+  function renderQa() {
+    var query = ($('qa-search') ? $('qa-search').value : '').trim().toLowerCase();
+
+    ['chat', 'single'].forEach(function (mode) {
+      var list = $('qa-list-' + mode);
+      if (!list) return;
+      list.textContent = '';
+
+      var group = groupByMode(mode);
+      var shown = group.filter(function (s) {
+        if (!query) return true;
+        var hay = (s.title || '') + ' ' + (s.messages || []).map(function (m) { return m.content || ''; }).join(' ');
+        return hay.toLowerCase().indexOf(query) >= 0;
+      });
+
+      var countEl = $('qa-count-' + mode);
+      if (countEl) countEl.textContent = group.length ? group.length + ' 条' : '';
+
+      shown.forEach(function (s) {
+        var li = document.createElement('li');
+        li.className = 'qa-item' + (qaOpenId === s.id ? ' is-open' : '');
+
+        var row = document.createElement('div');
+        row.className = 'qa-row';
+        var titleBtn = document.createElement('button');
+        titleBtn.type = 'button';
+        titleBtn.className = 'qa-title';
+        titleBtn.textContent = (qaOpenId === s.id ? '▾ ' : '▸ ') + (s.title || '(无标题)');
+        titleBtn.title = '点开看完整问答';
+        titleBtn.addEventListener('click', function () {
+          qaOpenId = qaOpenId === s.id ? null : s.id;
+          renderQa();
+        });
+        row.appendChild(titleBtn);
+
+        var time = document.createElement('span');
+        time.className = 'qa-time';
+        time.textContent = fmtTime(s.updatedAt || s.createdAt);
+        row.appendChild(time);
+        li.appendChild(row);
+
+        if (qaOpenId === s.id) li.appendChild(buildSessionDetail(s));
+        list.appendChild(li);
+      });
+
+      var emptyEl = $('qa-empty-' + mode);
+      if (emptyEl) {
+        emptyEl.hidden = shown.length > 0;
+        emptyEl.textContent = group.length === 0 ? '还没有' + SESSION_MODES[mode] + '记录' : '没有匹配的记录';
+      }
+    });
+
+    var chatCount = groupByMode('chat').length;
+    var singleCount = groupByMode('single').length;
+    if ($('qa-summary')) {
+      $('qa-summary').textContent =
+        sessions.length === 0
+          ? '还没有问答记录'
+          : '共 ' + sessions.length + ' 条（连续对话 ' + chatCount + ' · 单次问答 ' + singleCount + '）';
+    }
   }
 
   function addQa() {
@@ -622,20 +792,29 @@
       $('qa-q').focus();
       return;
     }
-    qaNotes.unshift({
+    var at = Date.now();
+    var s = {
       id: uid(),
-      q: q || '(未填问题)',
-      a: a || '(未填答案)',
+      mode: 'single',
+      title: titleFromText(q) || '手动记录',
       tag: $('qa-tag').value.trim(),
-      at: Date.now()
-    });
+      createdAt: at,
+      updatedAt: at,
+      messages: [
+        { id: uid(), role: 'user', content: q || '(未填问题)', at: at },
+        { id: uid(), role: 'assistant', content: a || '(未填答案)', at: at }
+      ]
+    };
+    sessions.unshift(s);
     $('qa-q').value = '';
     $('qa-a').value = '';
     $('qa-tag').value = '';
     var qaSearchReset = $('qa-search');
-    if (qaSearchReset && qaSearchReset.value) qaSearchReset.value = ''; // 保证新加的那条可见
-    saveQa();
+    if (qaSearchReset && qaSearchReset.value) qaSearchReset.value = '';
+    qaOpenId = s.id;
+    saveSessions();
     renderQa();
+    renderSidebar();
     renderFooter();
   }
 
@@ -825,9 +1004,6 @@
   });
 
   /* ---------------- ② 向 AI 提问：设置 ---------------- */
-
-  var chat = load(KEYS.chat, []);
-  if (!Array.isArray(chat)) chat = [];
 
   var settings = load(KEYS.settings, {});
   if (!settings.base) settings.base = DEFAULT_BASE;
@@ -1336,41 +1512,176 @@
   }
 
   /** 找到某条回答对应的上一个提问。 */
-  function questionBefore(index) {
+  function questionBefore(messages, index) {
     for (var i = index - 1; i >= 0; i -= 1) {
-      if (chat[i] && chat[i].role === 'user') return chat[i].content || '';
+      if (messages[i] && messages[i].role === 'user') return messages[i].content || '';
     }
     return '';
   }
 
-  /** 把某条 AI 回答连同它的问题一起存进「学习笔记 → AI问答笔记」。 */
-  function saveAnswerToQa(index) {
-    var msg = chat[index];
+  /** 把这一问一答单独存成一条「单次问答」记录（保留 Markdown 原文）。 */
+  function saveAnswerToNotebook(session, index) {
+    var messages = session ? session.messages : [];
+    var msg = messages[index];
     if (!msg || msg.role !== 'assistant' || msg.savedToQa) return false;
-    qaNotes.unshift({
+    var q = questionBefore(messages, index) || '(未记录问题)';
+    var at = Date.now();
+    sessions.unshift({
       id: uid(),
-      q: questionBefore(index) || '(未记录问题)',
-      a: msg.content || '',
-      tag: '',
-      at: Date.now(),
-      rich: true,
-      from: 'chat'
+      mode: 'single',
+      title: titleFromText(q) || titleFromText(session.title) || '收藏的问答',
+      createdAt: at,
+      updatedAt: at,
+      savedFrom: session.id,
+      messages: [
+        { id: uid(), role: 'user', content: q, at: at },
+        { id: uid(), role: 'assistant', content: msg.content || '', at: at }
+      ]
     });
-    // 清掉搜索框，否则刚收藏的这条可能被过滤掉、看不到
+    msg.savedToQa = true;
+    // 清掉搜索框，否则新收藏的那条可能被过滤掉、看不到
     var searchBox = $('qa-search');
     if (searchBox && searchBox.value) searchBox.value = '';
-    saveQa();
+    saveSessions();
     renderQa();
     renderFooter();
-    msg.savedToQa = true;
-    save(KEYS.chat, chat);
     return true;
+  }
+
+  /** 左侧栏：历史提问标题列表 */
+  function renderSidebar() {
+    var list = $('session-list');
+    if (!list) return;
+    list.textContent = '';
+
+    sessions.forEach(function (s) {
+      var li = document.createElement('li');
+      li.className = 'session-item' + (s.id === activeSessionId ? ' is-active' : '');
+
+      var titleBtn = document.createElement('button');
+      titleBtn.type = 'button';
+      titleBtn.className = 'session-title';
+      titleBtn.textContent = s.title || '(无标题)';
+      titleBtn.title = SESSION_MODES[s.mode] + ' · ' + fmtTime(s.updatedAt || s.createdAt);
+      titleBtn.addEventListener('click', function () {
+        openSession(s.id);
+      });
+
+      var tag = document.createElement('span');
+      tag.className = 'session-tag' + (s.mode === 'single' ? ' single' : '');
+      tag.textContent = s.mode === 'single' ? '单次' : '连续';
+
+      var renameBtn = document.createElement('button');
+      renameBtn.type = 'button';
+      renameBtn.className = 'session-icon';
+      renameBtn.textContent = '✎';
+      renameBtn.title = '改标题';
+      renameBtn.setAttribute('aria-label', '修改标题');
+      renameBtn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        var next = window.prompt('修改标题：', s.title || '');
+        if (next === null) return;
+        var t = next.trim();
+        if (!t) return;
+        s.title = t.slice(0, 60);
+        s.titleEdited = true;
+        saveSessions();
+        renderSidebar();
+        renderQa();
+      });
+
+      var delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'session-icon danger';
+      delBtn.textContent = '×';
+      delBtn.title = '删除这条记录';
+      delBtn.setAttribute('aria-label', '删除记录');
+      delBtn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        if (!confirm('删除「' + (s.title || '无标题') + '」？')) return;
+        sessions = sessions.filter(function (x) {
+          return x.id !== s.id;
+        });
+        if (activeSessionId === s.id) activeSessionId = null;
+        if (qaOpenId === s.id) qaOpenId = null;
+        saveSessions();
+        renderSidebar();
+        renderChat();
+        renderQa();
+        renderFooter();
+      });
+
+      li.appendChild(titleBtn);
+      li.appendChild(tag);
+      li.appendChild(renameBtn);
+      li.appendChild(delBtn);
+      list.appendChild(li);
+    });
+
+    var emptyEl = $('session-empty');
+    if (emptyEl) emptyEl.hidden = sessions.length > 0;
+  }
+
+  function updateModeButtons() {
+    Array.prototype.slice.call(document.querySelectorAll('.mode-btn')).forEach(function (btn) {
+      btn.classList.toggle('is-active', btn.dataset.mode === chatMode);
+    });
+    var hint = $('mode-hint');
+    if (hint) {
+      hint.textContent =
+        chatMode === 'chat'
+          ? '连续对话：接着上次继续聊，整段对话算一条记录。'
+          : '单次问答：每问一次就单独成一条记录，便于日后翻查。';
+    }
+  }
+
+  /** 打开一条历史记录（从侧栏标题或 AI 问答笔记进入） */
+  function openSession(id) {
+    var s = sessionById(id);
+    if (!s) return;
+    activeSessionId = s.id;
+    chatMode = s.mode || 'chat';
+    updateModeButtons();
+    renderSidebar();
+    renderChat();
+    keepSessionOnShow = true;
+    showScreen('chat');
+    if (history.replaceState) history.replaceState(null, '', '#chat');
+  }
+
+  function startNewQuestion() {
+    activeSessionId = null;
+    renderSidebar();
+    renderChat();
+    $('chat-status').textContent =
+      chatMode === 'chat' ? '已准备新提问：会新建一条「连续对话」' : '已准备新提问：会新建一条「单次问答」';
+    window.setTimeout(function () {
+      if (($('chat-status').textContent || '').indexOf('已准备新提问') === 0) $('chat-status').textContent = '';
+    }, 3500);
+    var box = $('chat-input');
+    if (box) box.focus();
   }
 
   function renderChat() {
     var log = $('chat-log');
+    if (!log) return;
     log.textContent = '';
-    chat.forEach(function (msg, index) {
+
+    var session = activeSession();
+    if (!session) {
+      var emptyBox = document.createElement('div');
+      emptyBox.className = 'chat-empty';
+      emptyBox.textContent =
+        '目前没有打开任何历史记录。直接提问就会新建一条「' +
+        SESSION_MODES[chatMode] +
+        '」；要看以前问过的，点左侧标题。';
+      log.appendChild(emptyBox);
+      renderSidebar();
+      return;
+    }
+
+    var messages = session.messages || [];
+    messages.forEach(function (msg, index) {
       var box = document.createElement('div');
       box.className = 'msg ' + msg.role;
 
@@ -1438,16 +1749,16 @@
         var saveBtn = document.createElement('button');
         saveBtn.type = 'button';
         saveBtn.className = 'btn mini' + (msg.savedToQa ? ' done' : '');
-        saveBtn.textContent = msg.savedToQa ? '已收藏到问答笔记' : '存为问答笔记';
-        saveBtn.title = '把这一问一答存进「学习笔记 → AI问答笔记」';
+        saveBtn.textContent = msg.savedToQa ? '已存为单次问答' : '存为单次问答';
+        saveBtn.title = '把这一问一答单独存进「学习笔记 → AI问答笔记 → 单次问答」';
         saveBtn.addEventListener('click', function () {
           if (msg.savedToQa) return;
-          if (!saveAnswerToQa(index)) return;
-          saveBtn.textContent = '已收藏到问答笔记';
+          if (!saveAnswerToNotebook(session, index)) return;
+          saveBtn.textContent = '已存为单次问答';
           saveBtn.classList.add('done');
-          $('chat-status').textContent = '已存入「学习笔记 → AI问答笔记」';
+          $('chat-status').textContent = '已存进「学习笔记 → AI问答笔记 → 单次问答」';
           window.setTimeout(function () {
-            if ($('chat-status').textContent === '已存入「学习笔记 → AI问答笔记」') $('chat-status').textContent = '';
+            if (($('chat-status').textContent || '').indexOf('已存进') === 0) $('chat-status').textContent = '';
           }, 3000);
         });
         actions.appendChild(saveBtn);
@@ -1456,10 +1767,24 @@
 
       log.appendChild(box);
     });
-    if (chat.length) window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    renderSidebar();
+    if (messages.length) window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
   }
 
-  function buildMessages() {
+  /** 从回答里取出模型自报的标题（首行「标题：xxx」），并把它从正文里去掉。 */
+  function extractTitle(content) {
+    var lines = String(content || '').split('\n');
+    for (var i = 0; i < Math.min(3, lines.length); i += 1) {
+      var m = lines[i].match(/^\s*(?:#+\s*)?(?:标题|title)\s*[:：]\s*(.+?)\s*$/i);
+      if (m) {
+        lines.splice(i, 1);
+        return { title: m[1].replace(/[*_`#]/g, '').trim(), content: lines.join('\n').replace(/^\s*\n/, '') };
+      }
+    }
+    return { title: '', content: content };
+  }
+
+  function buildMessages(session) {
     var doing = roadmap.filter(function (s) {
       return s.status === 'doing';
     });
@@ -1483,7 +1808,8 @@
         : '') +
       '。';
 
-    var history = chat
+    var messages = session && Array.isArray(session.messages) ? session.messages : [];
+    var history = messages
       .filter(function (m) {
         return m.role === 'user' || m.role === 'assistant';
       })
@@ -1507,11 +1833,22 @@
         return { role: 'user', content: text };
       });
 
-    return [{ role: 'system', content: SYSTEM_PROMPT + context }].concat(history);
+    var wantsTitle = session && !session.titleEdited && messages.filter(function (m) { return m.role === 'user'; }).length <= 1;
+    return [
+      {
+        role: 'system',
+        content:
+          SYSTEM_PROMPT +
+          context +
+          (wantsTitle
+            ? '\n另外：请在本轮回答的最前面单独用一行输出一个 6~14 字的标题，格式严格为「标题：xxxx」，然后空一行再写正文。'
+            : '')
+      }
+    ].concat(history);
   }
 
-  function requestBody() {
-    var body = { model: settings.model, messages: buildMessages(), stream: false };
+  function requestBody(session) {
+    var body = { model: settings.model, messages: buildMessages(session), stream: false };
     if (isDeepSeekBase()) {
       body.thinking = { type: settings.thinking ? 'enabled' : 'disabled' };
       if (settings.thinking) body.reasoning_effort = 'high';
@@ -1554,13 +1891,25 @@
       }
     }
 
-    chat.push(msg);
+    // 决定这条提问进哪个会话：
+    //   连续对话 → 没有打开记录时新建一条，之后一直追加
+    //   单次问答 → 每次提问都新建一条
+    var session = activeSession();
+    if (!session || (session.mode === 'single' && (session.messages || []).length > 0)) {
+      session = startSession(chatMode, titleFromText(text) || '新提问');
+    }
+    if (!session.title || session.title === '新提问') {
+      session.title = titleFromText(text) || session.title;
+    }
+
+    session.messages.push(msg);
     input.value = '';
     pending = [];
     renderPending();
     setAttachStatus('');
-    save(KEYS.chat, chat);
+    touchSession(session);
     renderChat();
+    renderQa();
 
     if (!settings.key) {
       $('chat-status').textContent =
@@ -1569,7 +1918,8 @@
     }
 
     if (msg.attachments && msg.attachments.length && modelLooksVisionless()) {
-      chat.push({
+      session.messages.push({
+        id: uid(),
         role: 'error',
         content:
           '提示：当前模型「' +
@@ -1577,7 +1927,7 @@
           '」不支持图片输入，图片不会被读到。请在「AI 设置」里把模型换成 deepseek-flash，再发一次带图的问题。',
         at: Date.now()
       });
-      save(KEYS.chat, chat);
+      saveSessions();
       renderChat();
       return;
     }
@@ -1593,7 +1943,7 @@
         'Content-Type': 'application/json',
         Authorization: 'Bearer ' + settings.key
       },
-      body: JSON.stringify(requestBody())
+      body: JSON.stringify(requestBody(session))
     })
       .then(function (res) {
         return res
@@ -1610,9 +1960,16 @@
             var message = data && data.choices && data.choices[0] ? data.choices[0].message : null;
             var content = message ? message.content : '';
             var reasoning = message && message.reasoning_content ? String(message.reasoning_content) : '';
-            var record = { role: 'assistant', content: (content || '(没有返回内容)').trim(), at: Date.now() };
+
+            var parsed = extractTitle(content);
+            var finalText = parsed.content;
+            if (parsed.title && !session.titleEdited) {
+              session.title = titleFromText(parsed.title) || session.title;
+            }
+
+            var record = { id: uid(), role: 'assistant', content: (finalText || '(没有返回内容)').trim(), at: Date.now() };
             if (reasoning) record.reasoning = reasoning.slice(0, MAX_REASON_CHARS);
-            chat.push(record);
+            session.messages.push(record);
           });
       })
       .catch(function (err) {
@@ -1620,7 +1977,8 @@
           msg.attachments && msg.attachments.length
             ? '\n（带图片提问时，模型必须支持图片；deepseek-flash 支持，deepseek-v4-pro 不支持）'
             : '';
-        chat.push({
+        session.messages.push({
+          id: uid(),
           role: 'error',
           content:
             '请求失败：' + err.message + extra + '\n（检查 Key 是否有效、余额是否足够、网络是否可访问该接口）',
@@ -1631,8 +1989,11 @@
         sending = false;
         $('chat-send').disabled = false;
         $('chat-status').textContent = '';
-        save(KEYS.chat, chat);
+        touchSession(session);
         renderChat();
+        renderSidebar();
+        renderQa();
+        renderFooter();
       });
   }
 
@@ -1661,9 +2022,10 @@
     var input = $('chat-input');
     var text = input.value.trim();
     if (!text) {
-      for (var i = chat.length - 1; i >= 0; i -= 1) {
-        if (chat[i].role === 'user') {
-          text = chat[i].content;
+      var messages = activeMessages();
+      for (var i = messages.length - 1; i >= 0; i -= 1) {
+        if (messages[i].role === 'user') {
+          text = messages[i].content;
           break;
         }
       }
@@ -1687,12 +2049,40 @@
   });
 
   $('chat-clear').addEventListener('click', function () {
-    if (chat.length === 0) return;
-    if (!confirm('清空全部对话记录？')) return;
-    chat = [];
-    sessionImages = {};
-    save(KEYS.chat, chat);
+    var session = activeSession();
+    if (!session) {
+      $('chat-status').textContent = '还没有打开任何记录';
+      return;
+    }
+    if (!(session.messages || []).length) return;
+    if (!confirm('清空这条记录里的全部消息？')) return;
+    session.messages = [];
+    session.titleEdited = false;
+    touchSession(session);
     renderChat();
+    renderSidebar();
+    renderQa();
+    renderFooter();
+  });
+
+  /* ---------------- 左侧栏：新提问 / 模式切换 ---------------- */
+
+  var newBtn = $('chat-new');
+  if (newBtn) newBtn.addEventListener('click', startNewQuestion);
+
+  Array.prototype.slice.call(document.querySelectorAll('.mode-btn')).forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      chatMode = btn.dataset.mode === 'single' ? 'single' : 'chat';
+      activeSessionId = null; // 切换模式后从"新提问"开始，避免混进上一条记录
+      updateModeButtons();
+      renderSidebar();
+      renderChat();
+      $('chat-status').textContent =
+        chatMode === 'single' ? '已切到单次问答：下次提问会单独成一条记录' : '已切到连续对话：下次提问会新建一条可继续的对话';
+      window.setTimeout(function () {
+        if (($('chat-status').textContent || '').indexOf('已切到') === 0) $('chat-status').textContent = '';
+      }, 3500);
+    });
   });
 
   /* ---------------- 所有界面通用：回到顶部 ---------------- */
@@ -1715,24 +2105,26 @@
   /* ---------------- 备份：导出 / 导入 ---------------- */
 
   function renderFooter() {
+    var chatCount = groupByMode('chat').length;
+    var singleCount = groupByMode('single').length;
     $('footer-status').textContent =
       '当前：路线 ' +
       roadmap.length +
-      ' 个阶段 · 对话 ' +
-      chat.length +
-      ' 条 · 卡片 ' +
+      ' 个阶段 · 卡片 ' +
       notes.length +
-      ' 张 · 问答 ' +
-      qaNotes.length +
+      ' 张 · 连续对话 ' +
+      chatCount +
+      ' 条 · 单次问答 ' +
+      singleCount +
       ' 条';
   }
 
   $('data-export').addEventListener('click', function () {
     var payload = {
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       roadmap: roadmap,
-      chat: chat,
+      sessions: sessions,
       notes: notes,
       settings: { base: settings.base, model: settings.model, thinking: settings.thinking }
     };
@@ -1767,16 +2159,34 @@
           roadmap = data.roadmap;
           saveRoadmap();
         }
-        if (Array.isArray(data.chat)) {
-          chat = data.chat;
-          save(KEYS.chat, chat);
+        if (Array.isArray(data.sessions)) {
+          sessions = data.sessions;
+          activeSessionId = null;
+          qaOpenId = null;
+          saveSessions();
+        } else if (Array.isArray(data.chat)) {
+          // 兼容 v1 备份：一条流水 → 一条「连续对话」
+          var firstQ = '';
+          for (var bi = 0; bi < data.chat.length; bi += 1) {
+            if (data.chat[bi] && data.chat[bi].role === 'user') {
+              firstQ = data.chat[bi].content || '';
+              break;
+            }
+          }
+          sessions = data.chat.length
+            ? [{ id: uid(), mode: 'chat', title: titleFromText(firstQ) || '导入的对话', createdAt: Date.now(), updatedAt: Date.now(), messages: data.chat }]
+            : [];
+          activeSessionId = null;
+          saveSessions();
         }
         if (Array.isArray(data.notes)) {
           notes = data.notes;
           saveNotes();
         }
         renderRoadmap();
+        renderSidebar();
         renderChat();
+        renderQa();
         renderNotes();
         renderFooter();
         alert('导入完成。');
@@ -1791,8 +2201,10 @@
   /* ---------------- 首次渲染 ---------------- */
 
   refreshApiState();
-  renderRoadmap();
+  updateModeButtons();
+  renderSidebar();
   renderChat();
+  renderRoadmap();
   renderNotes();
   renderQa();
   renderFooter();

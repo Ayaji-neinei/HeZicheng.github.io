@@ -1032,6 +1032,266 @@ summary:focus-visible {
   line-height: 1.7;
 }
 
+/* ---------- 向 AI 提问：左侧历史栏 ---------- */
+
+.chat-layout {
+  display: grid;
+  grid-template-columns: 215px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  margin-top: 16px;
+}
+
+.chat-sidebar {
+  position: sticky;
+  top: 72px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.sidebar-actions .btn {
+  width: 100%;
+}
+
+.mode-switch {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mode-btn.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.mode-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  max-height: 46vh;
+  overflow: auto;
+}
+
+.session-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 5px;
+  border-radius: 8px;
+}
+
+.session-item:hover {
+  background: #ffffff;
+}
+
+.session-item.is-active {
+  background: var(--accent-soft);
+}
+
+.session-title {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 2px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-item.is-active .session-title {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.session-tag {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.session-tag.single {
+  background: #fdf1dc;
+  color: var(--warn);
+}
+
+.session-icon {
+  padding: 2px 3px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.session-icon:hover {
+  color: var(--accent);
+}
+
+.session-icon.danger:hover {
+  color: var(--warn);
+}
+
+.chat-main {
+  min-width: 0;
+}
+
+.chat-main > .notice,
+.chat-main > .card {
+  margin-top: 0;
+}
+
+.chat-main > .card,
+.chat-main > .chat-log,
+.chat-main > .quick {
+  margin-top: 16px;
+}
+
+.chat-empty {
+  padding: 26px 16px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 14px;
+  text-align: center;
+  line-height: 1.8;
+}
+
+@media (max-width: 780px) {
+  .chat-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-sidebar {
+    position: static;
+  }
+
+  .session-list {
+    max-height: 32vh;
+  }
+}
+
+/* ---------- AI 问答笔记：两类，只显示标题 ---------- */
+
+.qa-group {
+  margin-top: 22px;
+}
+
+.qa-group-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.qa-count {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.qa-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.qa-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.qa-item.is-open {
+  border-color: var(--accent);
+  background: #ffffff;
+}
+
+.qa-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.qa-title {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qa-item.is-open .qa-title {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.qa-time {
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.qa-detail {
+  padding: 4px 12px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.qa-atts {
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 /* ---------- 页脚 ---------- */
 
 .site-footer {

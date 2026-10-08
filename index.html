@@ -6,7 +6,7 @@
     <title>AI 学习管理</title>
     <meta name="description" content="管理人工智能专业的学习：学习路线、向 AI 提问、学习笔记" />
     <link rel="stylesheet" href="vendor/katex/katex.min.css?v=7" />
-    <link rel="stylesheet" href="style.css?v=11" />
+    <link rel="stylesheet" href="style.css?v=12" />
     <link rel="icon" href="data:," />
   </head>
   <body>
@@ -68,6 +68,22 @@
           <p class="sub">关于学习的任何问题都可以问，回答会留在下面成为你的资料。</p>
         </div>
 
+        <div class="chat-layout">
+          <aside class="chat-sidebar" id="chat-sidebar" aria-label="历史提问">
+            <div class="sidebar-actions">
+              <button class="btn primary" type="button" id="chat-new">＋ 新提问</button>
+            </div>
+            <div class="mode-switch" role="group" aria-label="提问模式">
+              <button class="mode-btn is-active" type="button" data-mode="chat">连续对话</button>
+              <button class="mode-btn" type="button" data-mode="single">单次问答</button>
+            </div>
+            <p class="hint mode-hint" id="mode-hint">连续对话：可以接着上次继续聊。</p>
+            <ul class="session-list" id="session-list"></ul>
+            <p class="empty" id="session-empty" hidden>还没有历史提问</p>
+            <p class="hint">点标题打开历史提问；标题旁 ✎ 可以改名字。</p>
+          </aside>
+
+          <div class="chat-main">
         <div class="notice" id="chat-notice">
           还没填 API Key，所以页面暂时不会直接回答。三种免费用法：
           <strong>①</strong> 在下面「AI 设置」里点一个免费渠道（DeepSeek 官方新账号送额度 / 硅基流动 / 魔搭 / OpenRouter），
@@ -155,8 +171,10 @@
           <button class="btn primary" type="button" id="chat-send">发送</button>
           <button class="btn" type="button" id="chat-free">没有 Key？去 DeepSeek 官网免费问</button>
           <button class="btn" type="button" id="chat-copy">复制问题</button>
-          <button class="btn" type="button" id="chat-clear">清空对话</button>
+          <button class="btn" type="button" id="chat-clear">清空本条对话</button>
           <span class="status" id="chat-status"></span>
+        </div>
+          </div>
         </div>
       </section>
 
@@ -234,41 +252,50 @@
         </p>
       </section>
 
-      <!-- ---------- ③-3 AI 问答笔记（框架） ---------- -->
+      <!-- ---------- ③-3 AI 问答笔记（按提问模式分两类） ---------- -->
       <section class="screen" id="screen-notes-qa" aria-labelledby="h-qa">
         <div class="screen-head">
           <button class="btn back" type="button" data-screen="notes">← 返回</button>
           <h1 id="h-qa">AI 问答笔记</h1>
-          <p class="sub" id="qa-summary">还没有问答笔记</p>
+          <p class="sub" id="qa-summary">还没有问答记录</p>
         </div>
 
         <div class="notice">
-          这里沉淀"问过什么、答案是什么"。两种来源：在「向 AI 提问」里点回答下方的
-          <strong>「存为问答笔记」</strong>一键收藏（公式和代码会原样保留），
-          或者用下面的表单手动记录。
-        </div>
-
-        <label class="field">
-          <span>问题</span>
-          <input id="qa-q" type="text" placeholder="例如：为什么反向传播要用链式法则？" />
-        </label>
-
-        <label class="field">
-          <span>答案 / 要点</span>
-          <textarea id="qa-a" rows="3" placeholder="把 AI 的回答要点，或你自己的总结写在这里"></textarea>
-        </label>
-
-        <div class="row">
-          <input id="qa-tag" type="text" placeholder="标签（可选），例如：反向传播" aria-label="标签" />
-          <button class="btn primary" type="button" id="qa-add">添加问答</button>
+          这里是你在「向 AI 提问」里问过的全部记录，按模式分成两类，<strong>只显示标题</strong>，
+          点标题才会展开完整问答。想去原对话继续聊，展开后点「去这里继续对话」。
         </div>
 
         <div class="row">
-          <input id="qa-search" type="text" placeholder="搜索问题、答案或标签" aria-label="搜索问答" />
+          <input id="qa-search" type="text" placeholder="搜索标题或内容" aria-label="搜索问答" />
         </div>
 
-        <ul class="notes" id="qa-list"></ul>
-        <p class="empty" id="qa-empty" hidden>还没有问答笔记。</p>
+        <section class="qa-group">
+          <h2 class="qa-group-title">连续对话 <span class="qa-count" id="qa-count-chat"></span></h2>
+          <ul class="qa-list" id="qa-list-chat"></ul>
+          <p class="empty" id="qa-empty-chat" hidden>还没有连续对话记录</p>
+        </section>
+
+        <section class="qa-group">
+          <h2 class="qa-group-title">单次问答 <span class="qa-count" id="qa-count-single"></span></h2>
+          <ul class="qa-list" id="qa-list-single"></ul>
+          <p class="empty" id="qa-empty-single" hidden>还没有单次问答记录</p>
+        </section>
+
+        <details class="card">
+          <summary>手动补记一条单次问答</summary>
+          <label class="field">
+            <span>问题</span>
+            <input id="qa-q" type="text" placeholder="例如：为什么反向传播要用链式法则？" />
+          </label>
+          <label class="field">
+            <span>答案 / 要点</span>
+            <textarea id="qa-a" rows="3" placeholder="把 AI 的回答要点，或你自己的总结写在这里"></textarea>
+          </label>
+          <div class="row">
+            <input id="qa-tag" type="text" placeholder="标签（可选），例如：反向传播" aria-label="标签" />
+            <button class="btn primary" type="button" id="qa-add">添加</button>
+          </div>
+        </details>
       </section>
     </main>
 
@@ -283,7 +310,7 @@
         <input id="data-file" type="file" accept="application/json,.json" hidden />
       </div>
       <p class="sub" id="footer-status"></p>
-      <p class="sub" id="footer-version">页面版本 v11</p>
+      <p class="sub" id="footer-version">页面版本 v12</p>
     </footer>
 
     <!-- 所有界面通用：回到顶部 -->
@@ -294,7 +321,7 @@
     <script src="vendor/purify.min.js?v=7"></script>
     <script src="vendor/katex/katex.min.js?v=7"></script>
     <script src="vendor/katex/auto-render.min.js?v=7"></script>
-    <script src="app.js?v=11"></script>
+    <script src="app.js?v=12"></script>
     <script>
       // 如果 app.js 没被加载或执行（最常见的原因：浏览器缓存了旧文件），
       // 这段内联脚本不依赖任何外部文件，仍然能给出提示。
