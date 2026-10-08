@@ -221,7 +221,7 @@
 
   /* ---------------- 自检与错误提示 ---------------- */
 
-  var APP_VERSION = 'v11';
+  var APP_VERSION = 'v13';
 
   /**
    * 可用的 DeepSeek 渠道。注意：DeepSeek 官方没有「无需凭据的免费 API」，
@@ -1562,8 +1562,9 @@
       titleBtn.type = 'button';
       titleBtn.className = 'session-title';
       titleBtn.textContent = s.title || '(无标题)';
-      titleBtn.title = SESSION_MODES[s.mode] + ' · ' + fmtTime(s.updatedAt || s.createdAt);
-      titleBtn.addEventListener('click', function () {
+      titleBtn.title = SESSION_MODES[s.mode] + ' · ' + fmtTime(s.updatedAt || s.createdAt) + '（点击打开）';
+      titleBtn.addEventListener('click', function (event) {
+        event.stopPropagation();
         openSession(s.id);
       });
 
@@ -1615,6 +1616,14 @@
       li.appendChild(tag);
       li.appendChild(renameBtn);
       li.appendChild(delBtn);
+
+      // 整行都能点开（以前只有标题文字能点，点到旁边的标签会"没反应"）
+      li.addEventListener('click', function (event) {
+        var target = event.target;
+        if (target && target.closest && target.closest('.session-icon')) return;
+        openSession(s.id);
+      });
+
       list.appendChild(li);
     });
 
@@ -1624,7 +1633,10 @@
 
   function updateModeButtons() {
     Array.prototype.slice.call(document.querySelectorAll('.mode-btn')).forEach(function (btn) {
-      btn.classList.toggle('is-active', btn.dataset.mode === chatMode);
+      var on = btn.dataset.mode === chatMode;
+      btn.classList.toggle('is-active', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      btn.title = on ? '当前模式' : '点一下切换到' + (btn.dataset.mode === 'single' ? '单次问答' : '连续对话');
     });
     var hint = $('mode-hint');
     if (hint) {
@@ -1632,6 +1644,14 @@
         chatMode === 'chat'
           ? '连续对话：接着上次继续聊，整段对话算一条记录。'
           : '单次问答：每问一次就单独成一条记录，便于日后翻查。';
+    }
+    var line = $('chat-mode-line');
+    if (line) {
+      line.textContent =
+        chatMode === 'chat'
+          ? '当前模式：连续对话（多轮算一条，可随时回来接着聊）'
+          : '当前模式：单次问答（每问一次单独成一条记录）';
+      line.classList.toggle('single', chatMode === 'single');
     }
   }
 
@@ -2116,7 +2136,8 @@
       chatCount +
       ' 条 · 单次问答 ' +
       singleCount +
-      ' 条';
+      ' 条 · 脚本 ' +
+      APP_VERSION;
   }
 
   $('data-export').addEventListener('click', function () {

@@ -1071,6 +1071,13 @@ summary:focus-visible {
   font: inherit;
   font-size: 12px;
   cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.mode-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .mode-btn.is-active {
@@ -1078,6 +1085,20 @@ summary:focus-visible {
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 500;
+}
+
+.mode-line {
+  margin-top: 10px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.mode-line.single {
+  border-left-color: var(--warn);
 }
 
 .mode-hint {
@@ -1103,6 +1124,7 @@ summary:focus-visible {
   gap: 3px;
   padding: 3px 5px;
   border-radius: 8px;
+  cursor: pointer;
 }
 
 .session-item:hover {
