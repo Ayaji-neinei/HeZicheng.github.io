@@ -220,7 +220,7 @@
 
   /* ---------------- 自检与错误提示 ---------------- */
 
-  var APP_VERSION = 'v9';
+  var APP_VERSION = 'v10';
 
   function showAlert(text) {
     var el = $('app-alert');
@@ -527,7 +527,19 @@
 
       var a = document.createElement('div');
       a.className = 'note-body qa-a';
-      a.textContent = '答：' + item.a;
+      if (item.rich) {
+        // 从对话收藏来的答案保留原样（Markdown + 公式），按富文本渲染
+        var label = document.createElement('div');
+        label.className = 'qa-label';
+        label.textContent = '答：';
+        a.appendChild(label);
+        var richBody = document.createElement('div');
+        richBody.className = 'rich';
+        a.appendChild(richBody);
+        renderRichInto(richBody, item.a || '');
+      } else {
+        a.textContent = '答：' + item.a;
+      }
 
       var foot = document.createElement('div');
       foot.className = 'note-foot';
@@ -573,6 +585,8 @@
     $('qa-q').value = '';
     $('qa-a').value = '';
     $('qa-tag').value = '';
+    var qaSearchReset = $('qa-search');
+    if (qaSearchReset && qaSearchReset.value) qaSearchReset.value = ''; // 保证新加的那条可见
     saveQa();
     renderQa();
     renderFooter();
@@ -1170,10 +1184,42 @@
     });
   }
 
+  /** 找到某条回答对应的上一个提问。 */
+  function questionBefore(index) {
+    for (var i = index - 1; i >= 0; i -= 1) {
+      if (chat[i] && chat[i].role === 'user') return chat[i].content || '';
+    }
+    return '';
+  }
+
+  /** 把某条 AI 回答连同它的问题一起存进「学习笔记 → AI问答笔记」。 */
+  function saveAnswerToQa(index) {
+    var msg = chat[index];
+    if (!msg || msg.role !== 'assistant' || msg.savedToQa) return false;
+    qaNotes.unshift({
+      id: uid(),
+      q: questionBefore(index) || '(未记录问题)',
+      a: msg.content || '',
+      tag: '',
+      at: Date.now(),
+      rich: true,
+      from: 'chat'
+    });
+    // 清掉搜索框，否则刚收藏的这条可能被过滤掉、看不到
+    var searchBox = $('qa-search');
+    if (searchBox && searchBox.value) searchBox.value = '';
+    saveQa();
+    renderQa();
+    renderFooter();
+    msg.savedToQa = true;
+    save(KEYS.chat, chat);
+    return true;
+  }
+
   function renderChat() {
     var log = $('chat-log');
     log.textContent = '';
-    chat.forEach(function (msg) {
+    chat.forEach(function (msg, index) {
       var box = document.createElement('div');
       box.className = 'msg ' + msg.role;
 
@@ -1232,6 +1278,29 @@
         det.appendChild(sum);
         det.appendChild(pre);
         box.appendChild(det);
+      }
+
+      if (msg.role === 'assistant') {
+        var actions = document.createElement('div');
+        actions.className = 'msg-actions';
+
+        var saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'btn mini' + (msg.savedToQa ? ' done' : '');
+        saveBtn.textContent = msg.savedToQa ? '已收藏到问答笔记' : '存为问答笔记';
+        saveBtn.title = '把这一问一答存进「学习笔记 → AI问答笔记」';
+        saveBtn.addEventListener('click', function () {
+          if (msg.savedToQa) return;
+          if (!saveAnswerToQa(index)) return;
+          saveBtn.textContent = '已收藏到问答笔记';
+          saveBtn.classList.add('done');
+          $('chat-status').textContent = '已存入「学习笔记 → AI问答笔记」';
+          window.setTimeout(function () {
+            if ($('chat-status').textContent === '已存入「学习笔记 → AI问答笔记」') $('chat-status').textContent = '';
+          }, 3000);
+        });
+        actions.appendChild(saveBtn);
+        box.appendChild(actions);
       }
 
       log.appendChild(box);
@@ -1473,6 +1542,23 @@
     save(KEYS.chat, chat);
     renderChat();
   });
+
+  /* ---------------- 所有界面通用：回到顶部 ---------------- */
+
+  var toTopBtn = $('to-top');
+  if (toTopBtn) {
+    var syncToTop = function () {
+      var y = window.pageYOffset || document.documentElement.scrollTop || 0;
+      toTopBtn.hidden = y < 300;
+    };
+    window.addEventListener('scroll', syncToTop, { passive: true });
+    window.addEventListener('resize', syncToTop);
+    toTopBtn.addEventListener('click', function () {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      toTopBtn.hidden = true;
+    });
+    syncToTop();
+  }
 
   /* ---------------- 备份：导出 / 导入 ---------------- */
 

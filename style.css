@@ -911,6 +911,65 @@ summary:focus-visible {
   color: var(--text-muted);
 }
 
+.qa-label {
+  margin-bottom: 4px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* 从对话收藏来的答案：正文用正常颜色 */
+.qa-a .rich {
+  color: var(--text);
+}
+
+/* AI 回答下方的操作区（存为问答笔记） */
+.msg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.btn.mini.done {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+/* ---------- 回到顶部（所有界面通用） ---------- */
+
+.to-top {
+  position: fixed;
+  right: 20px;
+  bottom: 24px;
+  z-index: 30;
+  padding: 9px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(20, 30, 45, 0.14);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.to-top:hover,
+.to-top:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+@media (max-width: 560px) {
+  .to-top {
+    right: 14px;
+    bottom: 16px;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+}
+
 /* ---------- 页脚 ---------- */
 
 .site-footer {

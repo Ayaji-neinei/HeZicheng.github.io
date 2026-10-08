@@ -6,7 +6,7 @@
     <title>AI 学习管理</title>
     <meta name="description" content="管理人工智能专业的学习：学习路线、向 AI 提问、学习笔记" />
     <link rel="stylesheet" href="vendor/katex/katex.min.css?v=7" />
-    <link rel="stylesheet" href="style.css?v=9" />
+    <link rel="stylesheet" href="style.css?v=10" />
     <link rel="icon" href="data:," />
   </head>
   <body>
@@ -249,8 +249,9 @@
         </div>
 
         <div class="notice">
-          这里用来沉淀"问过什么、答案是什么"。现在是手动记录版本，
-          后续可以做成从「向 AI 提问」里<strong>一键收藏</strong>某轮问答。
+          这里沉淀"问过什么、答案是什么"。两种来源：在「向 AI 提问」里点回答下方的
+          <strong>「存为问答笔记」</strong>一键收藏（公式和代码会原样保留），
+          或者用下面的表单手动记录。
         </div>
 
         <label class="field">
@@ -288,15 +289,18 @@
         <input id="data-file" type="file" accept="application/json,.json" hidden />
       </div>
       <p class="sub" id="footer-status"></p>
-      <p class="sub" id="footer-version">页面版本 v9</p>
+      <p class="sub" id="footer-version">页面版本 v10</p>
     </footer>
+
+    <!-- 所有界面通用：回到顶部 -->
+    <button class="to-top" type="button" id="to-top" hidden aria-label="回到页面顶部">↑ 回到顶部</button>
 
     <!-- 公式与 Markdown 渲染：全部放在本站内，不依赖外部 CDN -->
     <script src="vendor/marked.umd.js?v=7"></script>
     <script src="vendor/purify.min.js?v=7"></script>
     <script src="vendor/katex/katex.min.js?v=7"></script>
     <script src="vendor/katex/auto-render.min.js?v=7"></script>
-    <script src="app.js?v=9"></script>
+    <script src="app.js?v=10"></script>
     <script>
       // 如果 app.js 没被加载或执行（最常见的原因：浏览器缓存了旧文件），
       // 这段内联脚本不依赖任何外部文件，仍然能给出提示。
